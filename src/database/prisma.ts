@@ -1,6 +1,7 @@
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../generated/prisma/client.ts';
 import { databaseUrlSchema } from '../config/env.ts';
+import { createDatabaseOptions } from './connection-options.ts';
 
 let client: PrismaClient | undefined;
 
@@ -8,7 +9,7 @@ export function getPrisma(databaseUrl: string | undefined = process.env.DATABASE
   if (!client) {
     const result = databaseUrlSchema.safeParse(databaseUrl);
     if (!result.success) throw new Error('A valid DATABASE_URL is required for database access.');
-    client = new PrismaClient({ adapter: new PrismaMariaDb(result.data) });
+    client = new PrismaClient({ adapter: new PrismaMariaDb(createDatabaseOptions(result.data)) });
   }
   return client;
 }
