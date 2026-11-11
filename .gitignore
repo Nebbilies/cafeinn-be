@@ -1,0 +1,10 @@
+node_modules/
+.env*
+!.env.example
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+src/generated/prisma/

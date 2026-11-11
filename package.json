@@ -1,0 +1,42 @@
+{
+  "name": "cafeinn-be",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^26.13.0",
+    "npm": "^11.20.0"
+  },
+  "packageManager": "npm@11.20.0",
+  "scripts": {
+    "dev": "node --watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "npm run db:generate && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "node --test tests/*.test.ts",
+    "db:validate": "prisma validate",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "express": "5.3.0",
+    "@prisma/client": "7.10.1",
+    "@prisma/adapter-mariadb": "7.10.1",
+    "mariadb": "3.5.5",
+    "zod": "4.6.7",
+    "helmet": "8.3.0",
+    "cors": "2.8.6",
+    "pino": "10.4.0"
+  },
+  "devDependencies": {
+    "prisma": "7.10.1",
+    "typescript": "6.0.3",
+    "eslint": "10.14.0",
+    "typescript-eslint": "8.72.2",
+    "@eslint/js": "10.0.1",
+    "globals": "17.14.0",
+    "@types/node": "26.6.6",
+    "@types/express": "5.0.6",
+    "@types/cors": "2.8.19"
+  }
+}
