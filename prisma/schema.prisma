@@ -9,3 +9,979 @@ generator client {
 datasource db {
   provider = "mysql"
 }
+
+// Physical design: docs/database-design.md. SQL CHECKs and view are in the migration.
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RoleName {
+  ADMIN
+  EVENT_STAFF
+  SALES_STAFF
+}
+
+enum VerificationPurpose {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+}
+
+enum MenuItemStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+enum AreaKind {
+  REGULAR
+  ACOUSTIC
+}
+
+enum AreaStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DiningTableStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TableOccupancy {
+  VACANT
+  OCCUPIED
+}
+
+enum StudyRoomStatus {
+  ACTIVE
+  MAINTENANCE
+}
+
+enum BookingChannel {
+  ONLINE
+  STAFF_ASSISTED
+}
+
+enum RoomBookingStatus {
+  HELD
+  CHECKED_IN
+  CANCELLED
+  NO_SHOW
+}
+
+enum EventBookingStatus {
+  HELD
+  PARTIALLY_ARRIVED
+  ARRIVED
+  CANCELLED
+  NO_SHOW
+  HOLD_EXPIRED
+}
+
+enum ProgramKind {
+  SPECIAL
+  RECURRING
+}
+
+enum ProgramStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum ScheduleVersionStatus {
+  DRAFT
+  FINALIZED
+  PUBLISHED
+  SUPERSEDED
+}
+
+enum ScheduleSlotKind {
+  SOUNDCHECK
+  PERFORMANCE
+  BREAK
+  PREPARATION
+}
+
+enum ArtistKind {
+  SOLO
+  BAND
+}
+
+enum ArtistStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  SUPERSEDED
+}
+
+enum AssignmentStatus {
+  PARTICIPATING
+  NOT_PARTICIPATING
+  PENDING
+}
+
+enum OrderServiceType {
+  DINE_IN
+  STUDY_ROOM
+  TAKEAWAY
+}
+
+enum OrderStatus {
+  OPEN
+  PAID
+  CANCELLED
+}
+
+enum TransactionKind {
+  COLLECTION
+  REFUND
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  RECONCILIATION_REQUIRED
+}
+
+enum RefundStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  COMPLETED
+  FAILED
+}
+
+enum ExpenseCategory {
+  F
+  H1
+  H2
+  H3
+  H4
+  H5
+}
+
+enum ProfitReportStatus {
+  PROVISIONAL
+  CHECKED
+}
+
+enum DataCompleteness {
+  COMPLETE
+  MISSING_DATA
+}
+
+enum ReportLineCode {
+  A
+  B
+  C
+  D
+  F
+  H1
+  H2
+  H3
+  H4
+  H5
+}
+
+enum ReportLineStatus {
+  AVAILABLE
+  NO_ACTIVITY
+  MISSING_DATA
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  SESSION_EXPIRED
+  PASSWORD_RESET
+  OTP_REQUESTED
+  OTP_VERIFIED
+  OTP_FAILED
+  OTP_EXPIRED
+  USER_CREATED
+  USER_UPDATED
+  USER_SUSPENDED
+  ROLE_ASSIGNED
+  ROLE_REVOKED
+  RECORD_CREATED
+  RECORD_UPDATED
+  RECORD_DELETED
+  PROGRAM_PUBLISHED
+  PROGRAM_CANCELLED
+  SCHEDULE_FINALIZED
+  RECURRING_GENERATED
+  INVITATION_SENT
+  INVITATION_RESPONDED
+  BOOKING_CREATED
+  BOOKING_CANCELLED
+  BOOKING_HOLD_RELEASED
+  CHECKIN_RECORDED
+  SURCHARGE_ASSIGNED
+  ROOM_CHECKED_IN
+  ROOM_EXTENDED
+  ROOM_MOVED
+  ROOM_CHECKED_OUT
+  ORDER_CREATED
+  ORDER_ITEMS_CHANGED
+  ITEM_PREPARED
+  ITEM_CANCELLED
+  TABLE_RELEASED
+  PAYMENT_CONFIRMED
+  PAYMENT_MISMATCH
+  RECEIPT_ISSUED
+  RECEIPT_REPRINTED
+  REFUND_REQUESTED
+  REFUND_APPROVED
+  REFUND_REJECTED
+  REFUND_COMPLETED
+  SHIFT_OPENED
+  REPORT_CREATED
+  REPORT_CHECKED
+  REPORT_EXPORTED
+  SHIFT_CLOSED
+  RECORD_SOFT_DELETED
+  RECORD_RESTORED
+}
+
+/// Source ERD: NHAN_VIEN
+model Employee {
+  id           Int            @id @default(autoincrement()) @db.Int
+  fullName     String         @map("full_name") @db.VarChar(100)
+  email        String         @unique @db.VarChar(100)
+  phone        String         @db.VarChar(15)
+  username     String         @unique @db.VarChar(50)
+  passwordHash String         @map("password_hash") @db.VarChar(255)
+  status       EmployeeStatus
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  deletedAt    DateTime?      @map("deleted_at") @db.Timestamp(3)
+
+  profitReports  ProfitReport[]  @relation("ProfitReport_reviewerId")
+  cashierShifts  CashierShift[]  @relation("CashierShift_employeeId")
+  employeeRoles  EmployeeRole[]  @relation("EmployeeRole_employeeId")
+  auditLogs      AuditLog[]      @relation("AuditLog_employeeId")
+  authSessions   AuthSession[]   @relation("AuthSession_employeeId")
+  refundRequests RefundRequest[] @relation("RefundRequest_reviewerId")
+
+  @@map("employees")
+}
+
+/// Source ERD: VAI_TRO
+model Role {
+  id        Int      @id @default(autoincrement()) @db.Int
+  name      RoleName @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  employeeRoles   EmployeeRole[]   @relation("EmployeeRole_roleId")
+  rolePermissions RolePermission[] @relation("RolePermission_roleId")
+
+  @@map("roles")
+}
+
+/// Source ERD: QUYEN
+model Permission {
+  id          Int      @id @default(autoincrement()) @db.Int
+  code        String   @unique @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  rolePermissions RolePermission[] @relation("RolePermission_permissionId")
+
+  @@map("permissions")
+}
+
+/// Source ERD: NHAN_VIEN_VAI_TRO
+model EmployeeRole {
+  employeeId Int      @map("employee_id") @db.Int
+  roleId     Int      @map("role_id") @db.Int
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  employee Employee @relation("EmployeeRole_employeeId", fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  role     Role     @relation("EmployeeRole_roleId", fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([employeeId, roleId])
+  @@index([roleId])
+  @@map("employee_roles")
+}
+
+/// Source ERD: VAI_TRO_QUYEN
+model RolePermission {
+  roleId       Int      @map("role_id") @db.Int
+  permissionId Int      @map("permission_id") @db.Int
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  role       Role       @relation("RolePermission_roleId", fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  permission Permission @relation("RolePermission_permissionId", fields: [permissionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// Source ERD: PHIEN_DANG_NHAP
+model AuthSession {
+  id         String   @id @default(uuid()) @db.Char(36)
+  employeeId Int      @map("employee_id") @db.Int
+  expiresAt  DateTime @map("expires_at") @db.Timestamp(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  employee Employee @relation("AuthSession_employeeId", fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employeeId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+/// Source ERD: MA_XAC_THUC
+model VerificationCode {
+  id             Int                 @id @default(autoincrement()) @db.Int
+  recipientEmail String              @map("recipient_email") @db.VarChar(100)
+  purpose        VerificationPurpose
+  codeHash       String              @map("code_hash") @db.VarChar(255)
+  expiresAt      DateTime            @map("expires_at") @db.Timestamp(3)
+  failedAttempts Int                 @default(0) @map("failed_attempts") @db.UnsignedTinyInt
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  @@index([expiresAt])
+  @@index([recipientEmail, purpose])
+  @@map("verification_codes")
+}
+
+/// Source ERD: NHAT_KY
+model AuditLog {
+  id         BigInt      @id @default(autoincrement()) @db.BigInt
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamp(3)
+  employeeId Int?        @map("employee_id") @db.Int
+  action     AuditAction
+  entityType String?     @map("entity_type") @db.VarChar(30)
+  entityKey  Json?       @map("entity_key") @db.Json
+  details    Json?       @db.Json
+
+  employee Employee? @relation("AuditLog_employeeId", fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([employeeId])
+  @@index([action, createdAt])
+  @@index([entityType, createdAt])
+  @@map("audit_logs")
+}
+
+/// Source ERD: CAU_HINH_HE_THONG
+model SystemSetting {
+  key         String   @id @db.VarChar(50)
+  value       String   @db.VarChar(255)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  @@map("system_settings")
+}
+
+/// Source ERD: DANH_MUC
+model MenuCategory {
+  id        Int       @id @default(autoincrement()) @db.Int
+  name      String    @unique @db.VarChar(100)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(3)
+
+  menuItems MenuItem[] @relation("MenuItem_categoryId")
+
+  @@map("menu_categories")
+}
+
+/// Source ERD: MON
+model MenuItem {
+  id         Int            @id @default(autoincrement()) @db.Int
+  categoryId Int            @map("category_id") @db.Int
+  name       String         @db.VarChar(100)
+  unitPrice  Int            @map("unit_price") @db.UnsignedInt
+  status     MenuItemStatus
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt  DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  deletedAt  DateTime?      @map("deleted_at") @db.Timestamp(3)
+
+  orderItems OrderItem[]  @relation("OrderItem_menuItemId")
+  category   MenuCategory @relation("MenuItem_categoryId", fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+/// Source ERD: KHU_VUC
+model ServiceArea {
+  id        Int        @id @default(autoincrement()) @db.Int
+  name      String     @unique @db.VarChar(100)
+  kind      AreaKind
+  status    AreaStatus
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  deletedAt DateTime?  @map("deleted_at") @db.Timestamp(3)
+
+  diningTables DiningTable[] @relation("DiningTable_areaId")
+  programs     Program[]     @relation("Program_areaId")
+
+  @@map("service_areas")
+}
+
+/// Source ERD: BAN
+model DiningTable {
+  id        Int               @id @default(autoincrement()) @db.Int
+  areaId    Int               @map("area_id") @db.Int
+  code      String            @unique @db.VarChar(10)
+  seats     Int               @db.UnsignedTinyInt
+  status    DiningTableStatus
+  occupancy TableOccupancy
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  deletedAt DateTime?         @map("deleted_at") @db.Timestamp(3)
+
+  area   ServiceArea @relation("DiningTable_areaId", fields: [areaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  orders Order[]     @relation("Order_diningTableId")
+
+  @@index([areaId])
+  @@map("dining_tables")
+}
+
+/// Source ERD: PHONG_HOC
+model StudyRoom {
+  id                     Int             @id @default(autoincrement()) @db.Int
+  code                   String          @unique @db.VarChar(10)
+  name                   String          @db.VarChar(50)
+  capacity               Int             @db.UnsignedTinyInt
+  hourlyRate             Int             @map("hourly_rate") @db.UnsignedInt
+  minimumDurationMinutes Int             @map("minimum_duration_minutes") @db.UnsignedSmallInt
+  status                 StudyRoomStatus
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt              DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  deletedAt              DateTime?       @map("deleted_at") @db.Timestamp(3)
+
+  roomBookings RoomBooking[] @relation("RoomBooking_roomId")
+  roomRentals  RoomRental[]  @relation("RoomRental_roomId")
+
+  @@map("study_rooms")
+}
+
+/// Source ERD: DAT_PHONG
+model RoomBooking {
+  id                 Int               @id @default(autoincrement()) @db.Int
+  roomId             Int               @map("room_id") @db.Int
+  contactName        String            @map("contact_name") @db.VarChar(100)
+  phone              String            @db.VarChar(15)
+  email              String?           @db.VarChar(100)
+  channel            BookingChannel
+  guestCount         Int               @map("guest_count") @db.UnsignedTinyInt
+  expectedCheckinAt  DateTime          @map("expected_checkin_at") @db.Timestamp(3)
+  expectedCheckoutAt DateTime          @map("expected_checkout_at") @db.Timestamp(3)
+  status             RoomBookingStatus
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt          DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  room        StudyRoom    @relation("RoomBooking_roomId", fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  roomRentals RoomRental[] @relation("RoomRental_roomBookingId")
+
+  @@index([roomId, expectedCheckinAt, expectedCheckoutAt])
+  @@map("room_bookings")
+}
+
+/// Source ERD: DAT_CHO_SU_KIEN
+model EventBooking {
+  id             Int                @id @default(autoincrement()) @db.Int
+  specialEventId Int                @map("special_event_id") @db.Int
+  contactName    String             @map("contact_name") @db.VarChar(100)
+  email          String?            @db.VarChar(100)
+  phone          String?            @db.VarChar(15)
+  channel        BookingChannel
+  guestCount     Int                @map("guest_count") @db.UnsignedSmallInt
+  notes          String?            @db.VarChar(255)
+  holdUntil      DateTime           @map("hold_until") @db.Timestamp(3)
+  status         EventBookingStatus
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt      DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  specialEvent    SpecialEvent     @relation("EventBooking_specialEventId", fields: [specialEventId], references: [programId], onDelete: Restrict, onUpdate: Restrict)
+  eventAttendance EventAttendance? @relation("EventAttendance_eventBookingId")
+
+  @@index([specialEventId, status])
+  @@map("event_bookings")
+}
+
+/// Source ERD: CHUONG_TRINH
+model Program {
+  id                         Int           @id @default(autoincrement()) @db.Int
+  areaId                     Int           @map("area_id") @db.Int
+  name                       String        @db.VarChar(150)
+  description                String?       @db.Text
+  kind                       ProgramKind
+  startsAt                   DateTime      @map("starts_at") @db.Timestamp(3)
+  endsAt                     DateTime      @map("ends_at") @db.Timestamp(3)
+  status                     ProgramStatus
+  recurringBatchId           Int?          @map("recurring_batch_id") @db.Int
+  publishedScheduleVersionId Int?          @unique @map("published_schedule_version_id") @db.Int
+  createdAt                  DateTime      @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt                  DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  area                     ServiceArea        @relation("Program_areaId", fields: [areaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recurringBatch           RecurringBatch?    @relation("Program_recurringBatchId", fields: [recurringBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  publishedScheduleVersion ScheduleVersion?   @relation("Program_publishedScheduleVersionId", fields: [publishedScheduleVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  artistInvitations        ArtistInvitation[] @relation("ArtistInvitation_programId")
+  scheduleVersions         ScheduleVersion[]  @relation("ScheduleVersion_programId")
+  specialEvent             SpecialEvent?      @relation("SpecialEvent_programId")
+
+  @@index([areaId])
+  @@index([recurringBatchId])
+  @@map("programs")
+}
+
+/// Source ERD: SU_KIEN_DAC_BIET
+model SpecialEvent {
+  programId            Int      @id @map("program_id") @db.Int
+  capacityLimit        Int      @map("capacity_limit") @db.UnsignedSmallInt
+  surchargePerPerson   Int      @map("surcharge_per_person") @db.UnsignedInt
+  registrationDeadline DateTime @map("registration_deadline") @db.Timestamp(3)
+  cancellationDeadline DateTime @map("cancellation_deadline") @db.Timestamp(3)
+  holdMinutes          Int      @map("hold_minutes") @db.UnsignedSmallInt
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  eventBookings    EventBooking[]    @relation("EventBooking_specialEventId")
+  eventAttendances EventAttendance[] @relation("EventAttendance_specialEventId")
+  program          Program           @relation("SpecialEvent_programId", fields: [programId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("special_events")
+}
+
+/// Source ERD: DOT_TAO_DINH_KY
+model RecurringBatch {
+  id           Int      @id @default(autoincrement()) @db.Int
+  fromDate     DateTime @map("from_date") @db.Date
+  toDate       DateTime @map("to_date") @db.Date
+  weekdays     Json     @db.Json
+  startTime    DateTime @map("start_time") @db.Time(0)
+  endTime      DateTime @map("end_time") @db.Time(0)
+  createdCount Int      @default(0) @map("created_count") @db.UnsignedSmallInt
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  programs Program[] @relation("Program_recurringBatchId")
+
+  @@map("recurring_batches")
+}
+
+/// Source ERD: PHIEN_BAN_LICH
+model ScheduleVersion {
+  id        Int                   @id @default(autoincrement()) @db.Int
+  programId Int                   @map("program_id") @db.Int
+  version   Int                   @db.UnsignedSmallInt
+  reason    String?               @db.VarChar(255)
+  status    ScheduleVersionStatus
+  createdAt DateTime              @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  publishedForProgram Program?       @relation("Program_publishedScheduleVersionId")
+  scheduleSlots       ScheduleSlot[] @relation("ScheduleSlot_scheduleVersionId")
+  program             Program        @relation("ScheduleVersion_programId", fields: [programId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([programId, version])
+  @@map("schedule_versions")
+}
+
+/// Source ERD: MOC_CHUONG_TRINH
+model ScheduleSlot {
+  id                Int              @id @default(autoincrement()) @db.Int
+  scheduleVersionId Int              @map("schedule_version_id") @db.Int
+  startsAt          DateTime         @map("starts_at") @db.Timestamp(3)
+  endsAt            DateTime         @map("ends_at") @db.Timestamp(3)
+  kind              ScheduleSlotKind
+  stage             String           @db.VarChar(50)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt         DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  scheduleVersion   ScheduleVersion    @relation("ScheduleSlot_scheduleVersionId", fields: [scheduleVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  artistAssignments ArtistAssignment[] @relation("ArtistAssignment_scheduleSlotId")
+
+  @@index([scheduleVersionId])
+  @@map("schedule_slots")
+}
+
+/// Source ERD: HO_SO_NGHE_SI
+model Artist {
+  id        Int          @id @default(autoincrement()) @db.Int
+  stageName String       @map("stage_name") @db.VarChar(100)
+  kind      ArtistKind
+  email     String       @unique @db.VarChar(100)
+  phone     String?      @db.VarChar(15)
+  genre     String?      @db.VarChar(50)
+  notes     String?      @db.Text
+  status    ArtistStatus
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  deletedAt DateTime?    @map("deleted_at") @db.Timestamp(3)
+
+  artistInvitations ArtistInvitation[] @relation("ArtistInvitation_artistId")
+  artistAssignments ArtistAssignment[] @relation("ArtistAssignment_artistId")
+
+  @@map("artists")
+}
+
+/// Source ERD: LOI_MOI
+model ArtistInvitation {
+  id               Int              @id @default(autoincrement()) @db.Int
+  programId        Int              @map("program_id") @db.Int
+  artistId         Int              @map("artist_id") @db.Int
+  startsAt         DateTime         @map("starts_at") @db.Timestamp(3)
+  endsAt           DateTime         @map("ends_at") @db.Timestamp(3)
+  content          String           @db.Text
+  fee              Int              @db.UnsignedInt
+  responseDeadline DateTime         @map("response_deadline") @db.Timestamp(3)
+  acceptToken      String           @unique @map("accept_token") @db.Char(64)
+  declineToken     String           @unique @map("decline_token") @db.Char(64)
+  status           InvitationStatus
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  program           Program            @relation("ArtistInvitation_programId", fields: [programId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  artist            Artist             @relation("ArtistInvitation_artistId", fields: [artistId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  artistAssignments ArtistAssignment[] @relation("ArtistAssignment_invitationId")
+
+  @@index([programId])
+  @@index([artistId])
+  @@map("artist_invitations")
+}
+
+/// Source ERD: PHAN_CONG
+model ArtistAssignment {
+  scheduleSlotId Int              @map("schedule_slot_id") @db.Int
+  artistId       Int              @map("artist_id") @db.Int
+  invitationId   Int?             @map("invitation_id") @db.Int
+  status         AssignmentStatus
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  scheduleSlot ScheduleSlot      @relation("ArtistAssignment_scheduleSlotId", fields: [scheduleSlotId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  artist       Artist            @relation("ArtistAssignment_artistId", fields: [artistId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  invitation   ArtistInvitation? @relation("ArtistAssignment_invitationId", fields: [invitationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([scheduleSlotId, artistId])
+  @@index([artistId])
+  @@index([invitationId])
+  @@map("artist_assignments")
+}
+
+/// Source ERD: LUOT_THAM_GIA
+model EventAttendance {
+  id             Int      @id @default(autoincrement()) @db.Int
+  specialEventId Int      @map("special_event_id") @db.Int
+  eventBookingId Int?     @unique @map("event_booking_id") @db.Int
+  contactName    String?  @map("contact_name") @db.VarChar(100)
+  phone          String?  @db.VarChar(15)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  eventCheckIns EventCheckIn[] @relation("EventCheckIn_attendanceId")
+  specialEvent  SpecialEvent   @relation("EventAttendance_specialEventId", fields: [specialEventId], references: [programId], onDelete: Restrict, onUpdate: Restrict)
+  eventBooking  EventBooking?  @relation("EventAttendance_eventBookingId", fields: [eventBookingId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([specialEventId])
+  @@map("event_attendances")
+}
+
+/// Source ERD: DOT_CHECK_IN
+model EventCheckIn {
+  id           Int      @id @default(autoincrement()) @db.Int
+  attendanceId Int      @map("attendance_id") @db.Int
+  guestCount   Int      @map("guest_count") @db.UnsignedSmallInt
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  attendance     EventAttendance @relation("EventCheckIn_attendanceId", fields: [attendanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  eventSurcharge EventSurcharge? @relation("EventSurcharge_checkInId")
+
+  @@index([attendanceId])
+  @@map("event_check_ins")
+}
+
+/// Source ERD: KHOAN_PHU_THU
+model EventSurcharge {
+  id        Int      @id @default(autoincrement()) @db.Int
+  checkInId Int      @unique @map("check_in_id") @db.Int
+  orderId   Int?     @map("order_id") @db.Int
+  unitPrice Int      @map("unit_price") @db.UnsignedInt
+  amount    Int      @db.UnsignedInt
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  checkIn            EventCheckIn        @relation("EventSurcharge_checkInId", fields: [checkInId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  order              Order?              @relation("EventSurcharge_orderId", fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentAllocations PaymentAllocation[] @relation("PaymentAllocation_eventSurchargeId")
+
+  @@index([orderId])
+  @@map("event_surcharges")
+}
+
+/// Source ERD: LUOT_THUE_PHONG
+model RoomRental {
+  id                     Int       @id @default(autoincrement()) @db.Int
+  roomBookingId          Int?      @map("room_booking_id") @db.Int
+  roomId                 Int       @map("room_id") @db.Int
+  roomChargeOrderId      Int?      @map("room_charge_order_id") @db.Int
+  contactName            String?   @map("contact_name") @db.VarChar(100)
+  phone                  String?   @db.VarChar(15)
+  guestCount             Int       @map("guest_count") @db.UnsignedTinyInt
+  checkedInAt            DateTime  @map("checked_in_at") @db.Timestamp(3)
+  checkedOutAt           DateTime? @map("checked_out_at") @db.Timestamp(3)
+  hourlyRate             Int       @map("hourly_rate") @db.UnsignedInt
+  minimumDurationMinutes Int       @map("minimum_duration_minutes") @db.UnsignedSmallInt
+  roundingMinutes        Int       @map("rounding_minutes") @db.UnsignedSmallInt
+  amount                 Int?      @db.UnsignedInt
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+  expectedCheckoutAt     DateTime  @map("expected_checkout_at") @db.Timestamp(3)
+
+  orders             Order[]             @relation("Order_roomRentalId")
+  roomBooking        RoomBooking?        @relation("RoomRental_roomBookingId", fields: [roomBookingId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  room               StudyRoom           @relation("RoomRental_roomId", fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  roomChargeOrder    Order?              @relation("RoomRental_roomChargeOrderId", fields: [roomChargeOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentAllocations PaymentAllocation[] @relation("PaymentAllocation_roomRentalId")
+
+  @@index([roomBookingId])
+  @@index([roomChargeOrderId])
+  @@index([roomId, checkedInAt])
+  @@map("room_rentals")
+}
+
+/// Source ERD: DON_HANG
+model Order {
+  id               Int              @id @default(autoincrement()) @db.Int
+  createdInShiftId Int              @map("created_in_shift_id") @db.Int
+  serviceType      OrderServiceType @map("service_type")
+  diningTableId    Int?             @map("dining_table_id") @db.Int
+  roomRentalId     Int?             @map("room_rental_id") @db.Int
+  status           OrderStatus
+  totalAmount      Int              @map("total_amount") @db.UnsignedInt
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  orderItems         OrderItem[]         @relation("OrderItem_orderId")
+  createdInShift     CashierShift        @relation("Order_createdInShiftId", fields: [createdInShiftId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  diningTable        DiningTable?        @relation("Order_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  roomRental         RoomRental?         @relation("Order_roomRentalId", fields: [roomRentalId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  eventSurcharges    EventSurcharge[]    @relation("EventSurcharge_orderId")
+  roomRentals        RoomRental[]        @relation("RoomRental_roomChargeOrderId")
+  paymentAllocations PaymentAllocation[] @relation("PaymentAllocation_orderId")
+
+  @@index([createdInShiftId, status])
+  @@index([diningTableId, status])
+  @@index([roomRentalId, status])
+  @@map("orders")
+}
+
+/// Source ERD: CHI_TIET_DON
+model OrderItem {
+  id                Int      @id @default(autoincrement()) @db.Int
+  orderId           Int      @map("order_id") @db.Int
+  menuItemId        Int      @map("menu_item_id") @db.Int
+  quantity          Int      @db.UnsignedSmallInt
+  preparedQuantity  Int      @default(0) @map("prepared_quantity") @db.UnsignedSmallInt
+  cancelledQuantity Int      @default(0) @map("cancelled_quantity") @db.UnsignedSmallInt
+  unitPrice         Int      @map("unit_price") @db.UnsignedInt
+  notes             String?  @db.VarChar(255)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  order                    Order                     @relation("OrderItem_orderId", fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  menuItem                 MenuItem                  @relation("OrderItem_menuItemId", fields: [menuItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  itemCancellationRequests ItemCancellationRequest[] @relation("ItemCancellationRequest_orderItemId")
+
+  @@index([orderId])
+  @@index([menuItemId])
+  @@map("order_items")
+}
+
+/// Source ERD: GIAO_DICH
+model PaymentTransaction {
+  id                Int               @id @default(autoincrement()) @db.Int
+  receivedInShiftId Int               @map("received_in_shift_id") @db.Int
+  kind              TransactionKind
+  method            PaymentMethod
+  amount            Int               @db.UnsignedInt
+  status            TransactionStatus
+  cashTendered      Int?              @map("cash_tendered") @db.UnsignedInt
+  transferContent   String?           @map("transfer_content") @db.VarChar(255)
+  bankReference     String?           @unique @map("bank_reference") @db.VarChar(50)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  receipt            Receipt?            @relation("Receipt_transactionId")
+  receivedInShift    CashierShift        @relation("PaymentTransaction_receivedInShiftId", fields: [receivedInShiftId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentAllocations PaymentAllocation[] @relation("PaymentAllocation_transactionId")
+  refundRequest      RefundRequest?      @relation("RefundRequest_refundTransactionId")
+
+  @@index([receivedInShiftId, status, createdAt])
+  @@map("payment_transactions")
+}
+
+/// Source ERD: PHAN_BO_THU
+model PaymentAllocation {
+  id               Int      @id @default(autoincrement()) @db.Int
+  transactionId    Int      @map("transaction_id") @db.Int
+  amount           Int      @db.UnsignedInt
+  orderId          Int?     @map("order_id") @db.Int
+  eventSurchargeId Int?     @map("event_surcharge_id") @db.Int
+  roomRentalId     Int?     @map("room_rental_id") @db.Int
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  transaction    PaymentTransaction @relation("PaymentAllocation_transactionId", fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  order          Order?             @relation("PaymentAllocation_orderId", fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  eventSurcharge EventSurcharge?    @relation("PaymentAllocation_eventSurchargeId", fields: [eventSurchargeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  roomRental     RoomRental?        @relation("PaymentAllocation_roomRentalId", fields: [roomRentalId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  refundRequests RefundRequest[]    @relation("RefundRequest_allocationId")
+
+  @@index([transactionId])
+  @@index([orderId])
+  @@index([eventSurchargeId])
+  @@index([roomRentalId])
+  @@map("payment_allocations")
+}
+
+/// Source ERD: BIEN_LAI
+model Receipt {
+  id            Int      @id @default(autoincrement()) @db.Int
+  transactionId Int      @unique @map("transaction_id") @db.Int
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  transaction PaymentTransaction @relation("Receipt_transactionId", fields: [transactionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("receipts")
+}
+
+/// Source ERD: YEU_CAU_HUY
+model ItemCancellationRequest {
+  id          Int      @id @default(autoincrement()) @db.Int
+  orderItemId Int      @map("order_item_id") @db.Int
+  quantity    Int      @db.UnsignedSmallInt
+  reason      String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  orderItem OrderItem @relation("ItemCancellationRequest_orderItemId", fields: [orderItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([orderItemId])
+  @@map("item_cancellation_requests")
+}
+
+/// Source ERD: YEU_CAU_HOAN
+model RefundRequest {
+  id                  Int          @id @default(autoincrement()) @db.Int
+  allocationId        Int          @map("allocation_id") @db.Int
+  amount              Int          @db.UnsignedInt
+  reason              String       @db.VarChar(255)
+  status              RefundStatus
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamp(3)
+  reviewerId          Int?         @map("reviewer_id") @db.Int
+  approvalBasis       String?      @map("approval_basis") @db.VarChar(255)
+  approvedAt          DateTime?    @map("approved_at") @db.Timestamp(3)
+  refundTransactionId Int?         @unique @map("refund_transaction_id") @db.Int
+  updatedAt           DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  allocation        PaymentAllocation   @relation("RefundRequest_allocationId", fields: [allocationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reviewer          Employee?           @relation("RefundRequest_reviewerId", fields: [reviewerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  refundTransaction PaymentTransaction? @relation("RefundRequest_refundTransactionId", fields: [refundTransactionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([allocationId])
+  @@index([reviewerId])
+  @@map("refund_requests")
+}
+
+/// Source ERD: CA_QUAY
+model CashierShift {
+  id                    Int       @id @default(autoincrement()) @db.Int
+  employeeId            Int       @map("employee_id") @db.Int
+  previousShiftId       Int?      @unique @map("previous_shift_id") @db.Int
+  openedAt              DateTime  @map("opened_at") @db.Timestamp(3)
+  closedAt              DateTime? @map("closed_at") @db.Timestamp(3)
+  openingCashAdjustment Int       @default(0) @map("opening_cash_adjustment") @db.Int
+  countedCash           Int?      @map("counted_cash") @db.UnsignedInt
+  explanation           String?   @db.VarChar(255)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  employee            Employee             @relation("CashierShift_employeeId", fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  previousShift       CashierShift?        @relation("CashierShift_previousShiftId", fields: [previousShiftId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  nextShift           CashierShift?        @relation("CashierShift_previousShiftId")
+  orders              Order[]              @relation("Order_createdInShiftId")
+  paymentTransactions PaymentTransaction[] @relation("PaymentTransaction_receivedInShiftId")
+
+  @@index([employeeId])
+  @@map("cashier_shifts")
+}
+
+/// Source ERD: KHOAN_CHI_PHI
+model ExpenseEntry {
+  id              Int             @id @default(autoincrement()) @db.Int
+  category        ExpenseCategory
+  amount          Int             @db.UnsignedInt
+  occurredOn      DateTime        @map("occurred_on") @db.Date
+  documentNumber  String?         @map("document_number") @db.VarChar(50)
+  allocationBasis String?         @map("allocation_basis") @db.VarChar(255)
+  description     String          @db.VarChar(255)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  @@index([occurredOn, category])
+  @@map("expense_entries")
+}
+
+/// Source ERD: BAO_CAO_LOI_NHUAN
+model ProfitReport {
+  id               Int                @id @default(autoincrement()) @db.Int
+  fromDate         DateTime           @map("from_date") @db.Date
+  toDate           DateTime           @map("to_date") @db.Date
+  version          Int                @db.UnsignedSmallInt
+  status           ProfitReportStatus
+  dataCompleteness DataCompleteness   @map("data_completeness")
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamp(3)
+  reviewerId       Int?               @map("reviewer_id") @db.Int
+  checkedAt        DateTime?          @map("checked_at") @db.Timestamp(3)
+  notes            String?            @db.Text
+  updatedAt        DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  reviewer          Employee?          @relation("ProfitReport_reviewerId", fields: [reviewerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  profitReportLines ProfitReportLine[] @relation("ProfitReportLine_reportId")
+
+  @@index([reviewerId])
+  @@index([fromDate, toDate, version])
+  @@map("profit_reports")
+}
+
+/// Source ERD: CHI_TIEU_BAO_CAO
+model ProfitReportLine {
+  reportId   Int              @map("report_id") @db.Int
+  id         ReportLineCode
+  amount     Int?             @db.UnsignedInt
+  dataStatus ReportLineStatus @map("data_status")
+  notes      String?          @db.VarChar(255)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt  DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamp(3)
+
+  report ProfitReport @relation("ProfitReportLine_reportId", fields: [reportId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([reportId, id])
+  @@map("profit_report_lines")
+}
