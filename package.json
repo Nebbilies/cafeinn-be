@@ -9,6 +9,7 @@
   },
   "packageManager": "npm@11.20.0",
   "scripts": {
+    "prepare": "node .husky/install.mjs",
     "db:seed": "npm run db:generate && node prisma/seed.ts",
     "dev": "node --watch src/server.ts",
     "start": "node dist/server.js",
@@ -38,6 +39,7 @@
     "globals": "17.14.0",
     "@types/node": "26.6.6",
     "@types/express": "5.0.6",
-    "@types/cors": "2.8.19"
+    "@types/cors": "2.8.19",
+    "husky": "9.1.7"
   }
 }
