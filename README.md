@@ -52,7 +52,7 @@ Generate the Prisma Client before type checking a fresh checkout. Generated code
 - **Pre-push:** generate Prisma Client, then run `npm run typecheck` and `npm test`. The client is generated locally without connecting to a database.
 - **Build:** runs on CI, not in Git hooks.
 
-GitHub Actions runs on every pull request, pushes to `main`, and manual dispatch. The `Quality checks` job installs the Node.js version from `.node-version` and npm from `packageManager`, installs the lockfile with `npm ci`, validates the Prisma schema, generates the client, and runs lint, typecheck, tests, and build. No database service or database secret is required. CI and production-only installs skip Husky setup.
+GitHub Actions runs on every pull request, pushes to `main`, and manual dispatch. The `Quality checks` job installs the Node.js version from `.node-version` and npm from `packageManager`, installs the lockfile with `npm ci --ignore-scripts`, validates the Prisma schema, generates the client explicitly, and runs lint, typecheck, tests, and build. Dependency installation scripts are disabled on CI. No database service or database secret is required. CI and production-only installs skip Husky setup.
 
 The `main` branch must require a pull request and the GitHub Actions `Quality checks` status check, including for administrators, with the branch up to date before merging. These are GitHub repository settings; the workflow file alone does not enforce them. A failed check is fixed by pushing another commit to the same pull request. The existing tests do not verify live database constraints or concurrency.
 
