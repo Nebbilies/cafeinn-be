@@ -138,3 +138,21 @@ npm run db:generate
 ```
 
 Coordinate shared-database application with the migration owner. Do not edit migrations that have already been applied.
+
+## Demo data
+
+After applying migrations to an **empty development database**, set `DATABASE_URL` in `.env` and run `npm run db:seed`. This creates 150 orders, menu/rooms/events, payments/refunds, shifts, reports, and 10 employees. A completed seed rerun makes no changes; a populated database without the seed marker is rejected. No reset is performed.
+
+Preview without a database connection: `npm run db:seed -- --dry-run`. Add `--reference-date 2026-11-12` for a reproducible Vietnam calendar date; otherwise the current Vietnam date is used. The original date stays unchanged on reruns.
+
+All demo accounts use password **`cafeinn@123`**:
+
+| Username | Roles | Status |
+| --- | --- | --- |
+| `admin` | ADMIN | Active |
+| `event01`, `event02` | EVENT_STAFF | Active |
+| `sales01`, `sales02`, `sales03` | SALES_STAFF | Active |
+| `event.sales` | EVENT_STAFF, SALES_STAFF | Active |
+| `admin.sales` | ADMIN, SALES_STAFF | Active |
+| `sales04` | SALES_STAFF | Inactive |
+| `sales05` | SALES_STAFF | Soft-deleted |

@@ -9,6 +9,7 @@
   },
   "packageManager": "npm@11.20.0",
   "scripts": {
+    "db:seed": "npm run db:generate && node prisma/seed.ts",
     "dev": "node --watch src/server.ts",
     "start": "node dist/server.js",
     "build": "npm run db:generate && tsc -p tsconfig.build.json",
