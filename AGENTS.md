@@ -19,6 +19,7 @@ The repository must work when cloned independently. The parent directory is the 
 ## HTTP and data
 
 - Preserve the agreed frontend/backend contract: endpoints, DTOs, error codes, and semantics. Flag breaking changes in advance and update the contract definition with the implementation.
+- When adding, changing, or removing an API endpoint, update its Swagger/OpenAPI documentation in `src/config/openapi.ts` in the same change. Document parameters, request bodies, response schemas, status codes, and authentication requirements as applicable. Keep examples consistent with the implemented contract; verify the specification at `/api-docs.json` and Swagger UI at `/api-docs/`.
 - Validate untrusted input at the boundary using the selected schema library. Distinguish validation, authentication, and authorization; frontend checks do not replace backend authorization.
 - Use appropriate HTTP statuses and stable error codes. Production errors must not expose stack traces, SQL, or connection details. Logs must not contain passwords, connection URLs, cookies, or tokens.
 - The backend confirms monetary amounts, price snapshots, states, and permissions. Preserve numeric and time representations from the schema and contract; avoid precision loss or unilateral timezone changes.
