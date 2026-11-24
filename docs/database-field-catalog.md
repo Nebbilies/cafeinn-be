@@ -1,5 +1,7 @@
 # Database field catalog
 
+The 39-table counts below describe the initial ERD reconciliation. The later program-management extension is documented at the end of this catalog and in [program management](program-management.md).
+
 Design authority: [database design](database-design.md). All names are English; source names identify the supplied ERD only.
 
 Source SHA-256: `245289be1802d145dc7cf43cface2655e237175b2e808fb1d7e2ea25a36808a6`.
@@ -742,3 +744,14 @@ All source payload identifiers must use the English fields above. For example RO
 CHECK constraints, opaque identifier collations, and `v_payment_allocation_orders` are authored in the migration. They are not recreated by a plain Prisma schema diff. See the design and verification report for mutation, source-tracing and soft-delete semantics.
 
 The migration explicitly selects InnoDB. Binary `utf8mb4_bin` comparison applies to `auth_sessions.id`, both invitation tokens, `verification_codes.code_hash`, `employees.password_hash`, and `payment_transactions.bank_reference`. Their source lengths and nullability remain unchanged; ordinary text retains `utf8mb4_unicode_ci`.
+
+## Program management extension (2026-11-24)
+
+The later migration 202611240003_program_management preserves all baseline business relationships. The schema remains the original 39 business models; no extra request table is added. Initial field/timestamp counts above remain historical baseline counts.
+
+| Model | SQL column | Prisma field | Type / semantics |
+| --- | --- | --- | --- |
+| Program | cover_image_url | coverImageUrl | Nullable VARCHAR(2048); optional HTTP(S) cover URL, no upload/fetch |
+| Program | revision | revision | INT UNSIGNED, required, default 1; incremented on successful editable API update |
+
+The separate request table was removed at user request before applying this migration to existing targets. Only the two Program columns are added. Legacy Program.description remains nullable for compatibility; new API creates/updates require content. No existing database was altered; verification uses disposable local schemas.

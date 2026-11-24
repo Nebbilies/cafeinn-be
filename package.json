@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "node --test tests/*.test.ts",
+    "test:programs:db": "node --test tests/programs.integration.ts",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate"
   },

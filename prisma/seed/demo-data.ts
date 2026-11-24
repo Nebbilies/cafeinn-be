@@ -58,7 +58,7 @@ export function buildDemoData(referenceDate: string) {
   programDays.forEach((day, i) => {
     const id = i + 1;
     const startHour = i < 6 ? 19 : 16;
-    data.program.push({ id, areaId: 2, name: `${i < 6 ? 'Special acoustic' : 'Weekly acoustic'} ${id}`, description: 'Demo live music program', kind: i < 6 ? 'SPECIAL' : 'RECURRING', startsAt: at(day, startHour), endsAt: at(day, startHour + 2), status: 'PUBLISHED', recurringBatchId: i < 6 ? null : 1, publishedScheduleVersionId: id, ...meta(at(Math.min(day - 7, -10))) });
+    data.program.push({ id, areaId: 2, name: `${i < 6 ? 'Special acoustic' : 'Weekly acoustic'} ${id}`, description: 'Demo live music program', coverImageUrl: null, revision: 1, kind: i < 6 ? 'SPECIAL' : 'RECURRING', startsAt: at(day, startHour), endsAt: at(day, startHour + 2), status: 'PUBLISHED', recurringBatchId: i < 6 ? null : 1, publishedScheduleVersionId: id, ...meta(at(Math.min(day - 7, -10))) });
     if (i < 6) data.specialEvent.push({ programId: id, capacityLimit: 50, surchargePerPerson: 50000, registrationDeadline: at(day, 17), cancellationDeadline: at(day - 1, 19), holdMinutes: 30, ...meta(at(Math.min(day - 7, -10))) });
     else data.recurringBatch[0].createdCount++;
     data.scheduleVersion.push({ id, programId: id, version: 1, reason: 'Initial published schedule', status: 'PUBLISHED', ...meta(at(Math.min(day - 3, -2))) });

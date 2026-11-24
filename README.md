@@ -174,3 +174,7 @@ All demo accounts use password **`cafeinn@123`**:
 | `admin.sales` | ADMIN, SALES_STAFF | Active |
 | `sales04` | SALES_STAFF | Inactive |
 | `sales05` | SALES_STAFF | Soft-deleted |
+
+## Program management
+
+Staff program management now supports special drafts, recurring previews/selected generation and guarded draft edits/deletion. Review the new program migration before recurring operations. Preview/create use existing staff authentication with no separate signing secret. See [program management](docs/program-management.md) for contracts, locks, repeat-submission behavior, configuration and isolated MySQL tests. Existing demo/shared databases were not migrated by this implementation.

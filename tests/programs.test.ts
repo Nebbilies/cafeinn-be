@@ -1,0 +1,322 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createApp } from "../src/app.ts";
+import { serve } from "./support/http-fixture.ts";
+import {
+  batchInput,
+  completeProgram,
+  createBatch,
+  createProgram,
+  listPrograms,
+  patchProgram,
+} from "../src/modules/programs/programs.schema.ts";
+import {
+  expandRecurrence,
+  holdUntil,
+  overlaps,
+  validInterval,
+} from "../src/modules/programs/recurrence.ts";
+import { selectedOccurrences } from "../src/modules/programs/recurring-input.ts";
+
+const special = {
+  areaId: 2,
+  name: "Acoustic evening",
+  description: "Live acoustic music",
+  kind: "SPECIAL" as const,
+  startsAt: "2026-11-27T19:30:00+07:00",
+  endsAt: "2026-11-27T21:30:00+07:00",
+  specialEvent: {
+    capacityLimit: 1000,
+    surchargePerPerson: 0,
+    registrationDeadline: "2026-11-27T19:30:00+07:00",
+    cancellationDeadline: "2026-11-27T18:00:00+07:00",
+  },
+};
+const batch = batchInput.parse({
+  areaId: 2,
+  name: "Weekly",
+  description: "Free acoustic music",
+  fromDate: "2026-11-27",
+  toDate: "2026-12-06",
+  weekdays: ["FRI", "SAT", "SUN"],
+  startTime: "19:30",
+  endTime: "21:30",
+});
+
+test("same-day means Vietnam calendar date, independent of input and UTC offsets", () => {
+  assert.equal(
+    validInterval(
+      new Date("2026-11-27T23:00:00Z"),
+      new Date("2026-11-28T01:00:00Z"),
+    ),
+    true,
+  );
+  assert.equal(
+    validInterval(
+      new Date("2026-11-27T16:30:00Z"),
+      new Date("2026-11-27T17:00:00Z"),
+    ),
+    false,
+  );
+  assert.equal(
+    validInterval(new Date(special.startsAt), new Date(special.startsAt)),
+    false,
+  );
+  assert.equal(
+    createProgram.safeParse({ ...special, endsAt: "2026-11-28T00:00:00+07:00" })
+      .success,
+    false,
+  );
+});
+
+test("special capacity is independent of seats; free surcharge and independent cutoffs accepted", () => {
+  assert.equal(createProgram.parse(special).specialEvent?.holdMinutes, 30);
+  assert.equal(
+    createProgram.safeParse({
+      ...special,
+      specialEvent: {
+        ...special.specialEvent,
+        cancellationDeadline: special.startsAt,
+        registrationDeadline: "2026-11-27T18:00:00+07:00",
+      },
+    }).success,
+    true,
+  );
+  assert.equal(
+    createProgram.safeParse({
+      ...special,
+      specialEvent: {
+        ...special.specialEvent,
+        registrationDeadline: "2026-11-27T19:31:00+07:00",
+      },
+    }).success,
+    false,
+  );
+  for (const capacityLimit of [0, -1, 65536, 2.5])
+    assert.equal(
+      createProgram.safeParse({
+        ...special,
+        specialEvent: { ...special.specialEvent, capacityLimit },
+      }).success,
+      false,
+    );
+  assert.equal(
+    holdUntil(
+      new Date(special.startsAt),
+      new Date("2026-11-27T19:40:00+07:00"),
+      30,
+    ).toISOString(),
+    "2026-11-27T12:40:00.000Z",
+  );
+});
+
+test("strict content/type/edit validation preserves state ownership", () => {
+  for (const description of ["", "   "])
+    assert.equal(
+      createProgram.safeParse({ ...special, description }).success,
+      false,
+    );
+  for (const coverImageUrl of [
+    "file:///tmp/a",
+    "https://user:pass@example.com/a",
+  ]) {
+    assert.equal(
+      createProgram.safeParse({ ...special, coverImageUrl }).success,
+      false,
+    );
+  }
+  assert.equal(
+    createProgram.safeParse({ ...special, status: "PUBLISHED" }).success,
+    false,
+  );
+  assert.equal(patchProgram.safeParse({ revision: 1 }).success, false);
+  assert.equal(
+    patchProgram.safeParse({ revision: 1, kind: "RECURRING" }).success,
+    false,
+  );
+  assert.equal(
+    completeProgram.safeParse({ ...special, kind: "RECURRING" }).success,
+    false,
+  );
+  assert.equal(
+    completeProgram.safeParse({
+      ...special,
+      specialEvent: undefined,
+      kind: "RECURRING",
+    }).success,
+    true,
+  );
+});
+
+test("recurrence expands exact selected weekdays and leap days; adjacency does not overlap", () => {
+  assert.deepEqual(
+    expandRecurrence(batch).map((row) => row.date),
+    [
+      "2026-11-27",
+      "2026-11-28",
+      "2026-11-29",
+      "2026-12-04",
+      "2026-12-05",
+      "2026-12-06",
+    ],
+  );
+  assert.deepEqual(
+    expandRecurrence({
+      ...batch,
+      fromDate: "2028-02-28",
+      toDate: "2028-03-01",
+      weekdays: ["TUE"],
+    }).map((row) => row.date),
+    ["2028-02-29"],
+  );
+  assert.equal(
+    expandRecurrence(batch)[0].startsAt.toISOString(),
+    "2026-11-27T12:30:00.000Z",
+  );
+  const a = {
+    startsAt: new Date(special.startsAt),
+    endsAt: new Date(special.endsAt),
+  };
+  assert.equal(
+    overlaps(a, {
+      startsAt: a.endsAt,
+      endsAt: new Date(a.endsAt.getTime() + 60000),
+    }),
+    false,
+  );
+  assert.equal(
+    overlaps(a, {
+      startsAt: new Date(a.endsAt.getTime() - 1),
+      endsAt: a.endsAt,
+    }),
+    true,
+  );
+  for (const input of [
+    { ...batch, weekdays: ["MON", "MON"] },
+    { ...batch, endTime: "01:00" },
+    { ...batch, toDate: "2028-01-01" },
+    { ...batch, fromDate: "2026-02-30" },
+  ]) {
+    assert.equal(batchInput.safeParse(input).success, false);
+  }
+  assert.equal(
+    batchInput.safeParse({
+      ...batch,
+      fromDate: "2038-01-19",
+      toDate: "2038-01-19",
+      startTime: "08:00",
+      endTime: "09:00",
+    }).success,
+    true,
+  );
+  assert.equal(
+    batchInput.safeParse({
+      ...batch,
+      fromDate: "2038-01-19",
+      toDate: "2038-01-19",
+    }).success,
+    false,
+  );
+});
+
+test("creation recomputes selection membership without a preview token or request key", () => {
+  const dates = ["2026-11-29", "2026-12-04"];
+  assert.deepEqual(
+    selectedOccurrences(batch, dates).map((row) => row.date),
+    dates,
+  );
+  for (const selected of [
+    [],
+    ["2026-12-07"],
+    ["2026-11-30"],
+    [dates[0], dates[0]],
+  ]) {
+    assert.throws(() => selectedOccurrences(batch, selected), {
+      code: "INVALID_INPUT",
+    });
+  }
+  assert.equal(
+    createBatch.safeParse({ input: batch, selectedDates: dates }).success,
+    true,
+  );
+  assert.equal(
+    createBatch.safeParse({
+      input: batch,
+      selectedDates: dates,
+      requestKey: "removed-field",
+    }).success,
+    false,
+  );
+  assert.equal(
+    createBatch.safeParse({ input: batch, selectedDates: [] }).success,
+    false,
+  );
+});
+
+test("program HTTP boundary protects both paths without database access", async (context) => {
+  const base = await serve(createApp(), context);
+  for (const path of ["/programs", "/programs/1", "/recurring-batches/1"]) {
+    const response = await fetch(base + "/api/v1" + path);
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).error.code, "SESSION_REQUIRED");
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+  }
+  for (const path of ["/programs", "/recurring-batches/preview"]) {
+    const denied = await fetch(base + "/api/v1" + path, {
+      method: "POST",
+      headers: { origin: "https://foreign.example" },
+    });
+    assert.equal(denied.status, 403);
+    assert.equal((await denied.json()).error.code, "ORIGIN_REJECTED");
+  }
+  const response = await fetch(base + "/api/v1/programs", {
+    method: "POST",
+    headers: {
+      cookie: "cafeinn_session=" + "a".repeat(64),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ ...special, description: "" }),
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, "INVALID_INPUT");
+  assert.equal(listPrograms.safeParse({ areaId: "1e2" }).success, false);
+});
+
+test("OpenAPI exposes protected program contracts and shared pagination", async (context) => {
+  const base = await serve(createApp(), context);
+  const document = await (await fetch(base + "/api-docs.json")).json();
+  const collection = document.paths["/api/v1/programs"];
+  assert.deepEqual(collection.post.security, [{ staffCookie: [] }]);
+  assert.ok(
+    collection.post.responses[201].content["application/json"].schema.properties
+      .revision,
+  );
+  assert.ok(document.paths["/api/v1/programs/{id}"].delete.requestBody);
+  assert.equal(
+    document.paths["/api/v1/recurring-batches"].post.responses[200],
+    undefined,
+  );
+  assert.ok(document.paths["/api/v1/recurring-batches"].post.responses[201]);
+  const recurring = document.paths["/api/v1/recurring-batches"];
+  assert.deepEqual(
+    recurring.post.requestBody.content[
+      "application/json"
+    ].schema.required.sort(),
+    ["input", "selectedDates"],
+  );
+  assert.equal(recurring.post.responses[503], undefined);
+  const responseSchema =
+    document.paths["/api/v1/recurring-batches/preview"].post.responses[200]
+      .content["application/json"].schema;
+  assert.deepEqual(responseSchema.required.sort(), [
+    "candidateCount",
+    "occurrences",
+    "validCount",
+  ]);
+  assert.deepEqual(
+    collection.get.responses[200].content[
+      "application/json"
+    ].schema.required.sort(),
+    ["items", "pagination"],
+  );
+});
