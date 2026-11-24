@@ -8,7 +8,7 @@ try {
   loadEnvironment();
   const environment = readEnvironment();
   const logger = createLogger(environment.LOG_LEVEL);
-  const server = createApp({ corsOrigin: environment.CORS_ORIGIN }).listen(environment.PORT, () => {
+  const server = createApp({ corsOrigin: environment.CORS_ORIGIN, trustedProxyIp:environment.TRUSTED_PROXY_IP }).listen(environment.PORT, () => {
     logger.info({ port: environment.PORT }, 'API listening');
   });
   server.on('error', () => {

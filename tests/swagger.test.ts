@@ -24,6 +24,23 @@ test('OpenAPI documents the live health response without database configuration'
   }
 });
 
+test('OpenAPI describes the employee list query and pagination response', async (context) => {
+  const baseUrl = await serve(createApp(), context);
+  const document = await (await fetch(baseUrl + '/api-docs.json')).json();
+  const operation = document.paths['/api/v1/employees'].get;
+  const parameters = Object.fromEntries(operation.parameters?.map(
+    (parameter: { name: string; schema: object }) => [parameter.name, parameter.schema],
+  ) ?? []);
+  assert.deepEqual(Object.keys(parameters).sort(), ['page', 'pageSize', 'search', 'sort', 'status']);
+  assert.equal(parameters.page.default, 1);
+  assert.equal(parameters.pageSize.default, 10);
+  assert.equal(parameters.pageSize.maximum, 50);
+  const response = operation.responses[200].content['application/json'].schema;
+  assert.deepEqual(response.required.sort(), ['items', 'pagination']);
+  assert.deepEqual(response.properties.pagination.required.sort(), ['page', 'pageSize', 'totalItems', 'totalPages']);
+  assert.ok(operation.responses[400]);
+});
+
 test('Swagger UI redirects, serves local assets, and loads the OpenAPI endpoint', async (context) => {
   const baseUrl = await serve(createApp(), context);
   const redirect = await fetch(baseUrl + '/api-docs', { redirect: 'manual' });
