@@ -6,7 +6,7 @@ Express and strict TypeScript foundation for a single acoustic cafe: F&B/POS, ev
 
 Set `DATABASE_URL`. If the portal runs outside `http://localhost:3000`, set `CORS_ORIGIN` to its exact origin for staff sign-in. On an existing database, check for usernames containing `@` with `SELECT id FROM employees WHERE username LIKE '%@%'` and resolve any matches before running `npx prisma migrate deploy`.
 
-Start Mailpit for dev or demo and open its inbox at `http://127.0.0.1:8025`.
+Start Mailpit for dev or demo and open its inbox at `http://127.0.0.1:8025`. SMTP hosts outside loopback must support STARTTLS.
 
 ```sh
 docker run --rm -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 axllent/mailpit
