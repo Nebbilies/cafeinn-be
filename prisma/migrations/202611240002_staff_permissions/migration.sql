@@ -1,29 +1,40 @@
--- An empty catalog is populated by the seed.
-INSERT INTO permissions (code, updated_at) SELECT 'users.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'users.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'users.manage' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'reports.read', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'reports.read');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'reports.read' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'menu.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'menu.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'menu.manage' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'tables.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'tables.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'tables.manage' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'rooms.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'rooms.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'rooms.manage' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'refunds.approve', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'refunds.approve');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'refunds.approve' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'expenses.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'expenses.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'expenses.manage' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'policies.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'policies.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'policies.manage' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'audit.read', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'audit.read');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'audit.read' WHERE r.name = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'events.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'EVENT_STAFF' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'events.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'events.manage' WHERE r.name = 'EVENT_STAFF' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'sales.manage', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'SALES_STAFF' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'sales.manage');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'sales.manage' WHERE r.name = 'SALES_STAFF' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'menu.status', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'SALES_STAFF' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'menu.status');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'menu.status' WHERE r.name = 'SALES_STAFF' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-INSERT INTO permissions (code, updated_at) SELECT 'refunds.request', CURRENT_TIMESTAMP(3) FROM roles WHERE name = 'SALES_STAFF' AND NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'refunds.request');
-INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'refunds.request' WHERE r.name = 'SALES_STAFF' AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
-DELETE rp FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
-WHERE (p.code = 'reports.read' AND r.name <> 'ADMIN') OR (r.name = 'ADMIN' AND p.code IN ('sales.manage', 'events.manage'));
+-- Existing roles receive the staff grants. An empty database is populated by the seed.
+SET @staff_grants = JSON_OBJECT(
+    'ADMIN', JSON_ARRAY(
+        'users.manage', 'reports.read', 'menu.manage', 'tables.manage', 'rooms.manage',
+        'refunds.approve', 'expenses.manage', 'policies.manage', 'audit.read'
+    ),
+    'EVENT_STAFF', JSON_ARRAY('events.manage'),
+    'SALES_STAFF', JSON_ARRAY('sales.manage', 'menu.status', 'refunds.request')
+);
+
+START TRANSACTION;
+
+INSERT INTO permissions (code, updated_at)
+SELECT DISTINCT grant_list.code, CURRENT_TIMESTAMP(3)
+FROM roles AS r
+JOIN JSON_TABLE(JSON_EXTRACT(@staff_grants, CONCAT('$.', r.name)), '$[*]'
+    COLUMNS (code VARCHAR(50) PATH '$')) AS grant_list ON TRUE
+LEFT JOIN permissions AS p ON p.code = CONVERT(grant_list.code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+WHERE p.id IS NULL;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles AS r
+JOIN JSON_TABLE(JSON_EXTRACT(@staff_grants, CONCAT('$.', r.name)), '$[*]'
+    COLUMNS (code VARCHAR(50) PATH '$')) AS grant_list ON TRUE
+JOIN permissions AS p ON p.code = CONVERT(grant_list.code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+LEFT JOIN role_permissions AS rp ON rp.role_id = r.id AND rp.permission_id = p.id
+WHERE rp.role_id IS NULL;
+
+DELETE rp
+FROM role_permissions AS rp
+JOIN roles AS r ON r.id = rp.role_id
+JOIN permissions AS p ON p.id = rp.permission_id
+WHERE CASE WHEN r.name = 'ADMIN'
+    THEN p.code IN ('sales.manage', 'events.manage')
+    ELSE p.code = 'reports.read'
+END;
+
+COMMIT;
+SET @staff_grants = NULL;
