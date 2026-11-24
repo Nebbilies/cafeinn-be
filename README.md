@@ -2,6 +2,24 @@
 
 Express and strict TypeScript foundation for a single acoustic cafe: F&B/POS, events, and study rooms.
 
+## Staff authentication and Mailpit
+
+Set `DATABASE_URL`. If the portal runs outside `http://localhost:3000`, set `CORS_ORIGIN` to its exact origin for staff sign-in. On an existing database, check for usernames containing `@` with `SELECT id FROM employees WHERE username LIKE '%@%'` and resolve any matches before running `npx prisma migrate deploy`.
+
+Start Mailpit for dev or demo and open its inbox at `http://127.0.0.1:8025`. SMTP hosts outside loopback must support STARTTLS.
+
+```sh
+docker run --rm -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 axllent/mailpit
+```
+
+Set `RECOVERY_SECRET` in the backend `.env` to a per-environment key for password recovery codes. Changing it invalidates outstanding codes.
+
+```sh
+node -p "require('node:crypto').randomBytes(32).toString('hex')"
+```
+
+Set `TRUSTED_PROXY_IP` only if the gateway overwrites inbound `X-Forwarded-For`.
+
 ## Requirements
 
 - Node.js **26.13.0 LTS** (supported range: `^26.13.0`).
@@ -50,7 +68,7 @@ Generate the Prisma Client before type checking a fresh checkout. Generated code
 | --- | --- |
 | `NODE_ENV` | `development`; also accepts `test` or `production`. |
 | `PORT` | `4000`. |
-| `CORS_ORIGIN` | `http://localhost:3000`; one HTTP(S) origin without credentials, query, or a path. |
+| `CORS_ORIGIN` | Defaults to `http://localhost:3000`. Use one HTTP(S) origin, or `*` for cookie-free cross-origin access with staff cookies limited to the default portal origin. |
 | `LOG_LEVEL` | `info`; supports Pino levels and `silent`. |
 | `DATABASE_URL` | Optional for startup/liveness; required when database access is explicitly requested. |
 

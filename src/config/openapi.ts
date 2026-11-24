@@ -1,3 +1,5 @@
+import { staffPaths } from './staff-openapi.ts';
+
 export const openApiDocument = {
   openapi: '3.0.3',
   info: {
@@ -7,7 +9,9 @@ export const openApiDocument = {
   },
   servers: [{ url: '/' }],
   tags: [{ name: 'Health', description: 'Service liveness.' }],
+  components: {securitySchemes:{staffCookie:{type:'apiKey',in:'cookie',name:'cafeinn_session'}}},
   paths: {
+    ...staffPaths,
     '/api/v1/health': {
       get: {
         tags: ['Health'],

@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { randomBytes, scryptSync } from 'node:crypto';
+import { hashPassword } from '../src/modules/auth/auth-password.ts';
 import { buildDemoData, DEMO_PASSWORD } from './seed/demo-data.ts';
 import { validateDemoData } from './seed/validate-data.ts';
 
@@ -15,9 +15,7 @@ async function main() {
     return;
   }
   for (const employee of data.employee) {
-    const salt = randomBytes(16).toString('hex');
-    const digest = scryptSync(DEMO_PASSWORD, salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex');
-    employee.passwordHash = `scrypt$16384$8$1$${salt}$${digest}`;
+    employee.passwordHash = await hashPassword(DEMO_PASSWORD);
   }
   const { loadEnvironment } = await import('../src/config/load-env.ts');
   loadEnvironment();

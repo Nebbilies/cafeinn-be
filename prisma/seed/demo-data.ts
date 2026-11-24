@@ -1,4 +1,5 @@
 import { emptyData } from './data-types.ts';
+import { staffGrants } from '../../src/modules/auth/auth-permissions.ts';
 
 export const DEMO_VERSION = '1';
 export const DEMO_MARKER = 'DEMO_SEED_V1';
@@ -13,16 +14,18 @@ export function buildDemoData(referenceDate: string) {
   const names = ['Nguyen Minh Anh', 'Tran Bao Ngoc', 'Le Quoc Huy', 'Pham Thao Linh', 'Hoang Gia Bao', 'Vo Thanh Ha', 'Dang Duc Minh', 'Bui Mai Chi', 'Do Khanh Vy', 'Phan Tuan Kiet'];
   const users = ['admin', 'event01', 'event02', 'sales01', 'sales02', 'sales03', 'sales04', 'sales05', 'event.sales', 'admin.sales'];
   users.forEach((username, i) => {
-    data.employee.push({ id: i + 1, username, fullName: names[i], email: `${username}@example.com`, phone: `09000000${String(i).padStart(2, '0')}`, passwordHash: 'DRY_RUN_NOT_A_PASSWORD_HASH', status: i === 6 ? 'INACTIVE' : 'ACTIVE', deletedAt: i === 7 ? at(-2) : null, ...meta() });
+    data.employee.push({ id: i + 1, username, fullName: names[i], email: `${username}@example.com`, phone: `09000000${String(i).padStart(2, '0')}`, failedLogins: 0, lockedUntil: null, passwordHash: 'DRY_RUN_NOT_A_PASSWORD_HASH', status: i === 6 ? 'INACTIVE' : 'ACTIVE', deletedAt: i === 7 ? at(-2) : null, ...meta() });
   });
   (['ADMIN', 'EVENT_STAFF', 'SALES_STAFF'] as const).forEach((name, i) => data.role.push({ id: i + 1, name, ...meta() }));
   const memberships = [[1], [2], [2], [3], [3], [3], [3], [3], [2, 3], [1, 3]];
   memberships.forEach((roles, i) => roles.forEach(roleId => data.employeeRole.push({ employeeId: i + 1, roleId, createdAt: at(-30) })));
-  ['users.manage', 'events.manage', 'sales.manage', 'reports.read'].forEach((code, i) => {
-    data.permission.push({ id: i + 1, code, description: `Demo permission: ${code}`, ...meta() });
-    const roles = i === 0 ? [1] : i === 1 ? [1, 2] : i === 2 ? [1, 3] : [1, 2, 3];
-    roles.forEach(roleId => data.rolePermission.push({ roleId, permissionId: i + 1, createdAt: at(-30) }));
-  });
+  for (const role of data.role) {
+    for (const code of staffGrants[role.name]) {
+      const id = data.permission.length + 1;
+      data.permission.push({ id, code, description: code, ...meta() });
+      data.rolePermission.push({ roleId: role.id, permissionId: id, createdAt: at(-30) });
+    }
+  }
   const menus = [
     ['Coffee', 'Espresso', 'Americano', 'Latte', 'Cappuccino', 'Vietnamese iced coffee'],
     ['Tea', 'Peach tea', 'Lychee tea', 'Jasmine tea', 'Matcha latte', 'Oolong tea'],
