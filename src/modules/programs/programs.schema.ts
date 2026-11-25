@@ -4,7 +4,10 @@ import { validInterval, weekdays } from "./recurrence.ts";
 
 export const programId = z.coerce.number().int().positive().max(2147483647);
 const bodyId = z.int().positive().max(2147483647);
-export const instant = z.iso.datetime({ offset: true }).refine((value) => {
+export const instant = z.iso.datetime({ offset: true }).refine(
+  (value) => !/\.\d{4}/.test(value),
+  "Instant supports at most three fractional-second digits.",
+).refine((value) => {
   const time = Date.parse(value);
   return time >= 1000 && time <= Date.parse("2038-01-19T03:14:07.000Z");
 }, "Instant is outside the supported MySQL timestamp range.");

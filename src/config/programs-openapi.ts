@@ -99,7 +99,7 @@ function operation(
     },
   };
   const errors: Record<number, string> = {
-    400: "INVALID_INPUT: malformed/disallowed cover URL, strict input, same Vietnam date, independent deadlines <= start, or bounded selection validation failed.",
+    400: "INVALID_INPUT: malformed/disallowed cover URL, instant precision above three fractional-second digits, strict input, same Vietnam date, independent deadlines <= start, or bounded selection validation failed.",
     401: "SESSION_REQUIRED: missing, expired or ineligible staff session.",
     403: "FORBIDDEN (events.manage required) or ORIGIN_REJECTED.",
     404: "PROGRAM_NOT_FOUND, AREA_NOT_FOUND or RECURRING_BATCH_NOT_FOUND.",
@@ -133,7 +133,7 @@ function operation(
   };
 }
 const intervalRules =
-  "Requires events.manage. DRAFT and PUBLISHED reserve their acoustic area; CANCELLED releases it. Intervals are half-open, adjacency is valid, and both types stay within one Asia/Ho_Chi_Minh date. ISO instants require an offset. Public content is required; coverImageUrl is optional and never fetched/uploaded by this API.";
+  "Requires events.manage. DRAFT and PUBLISHED reserve their acoustic area; CANCELLED releases it. Intervals are half-open, adjacency is valid, and both types stay within one Asia/Ho_Chi_Minh date. ISO instants require an offset and at most three fractional-second digits; whole seconds are accepted. Public content is required; coverImageUrl is optional and never fetched/uploaded by this API.";
 
 export const programPaths = {
   "/api/v1/programs": {

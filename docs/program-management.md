@@ -16,6 +16,8 @@ All routes require `cafeinn_session` and `events.manage`; ADMIN-only has no bypa
 
 OpenAPI success/error schemas describe output objects with `additionalProperties: false`, including nested DTOs. Request bodies and query parameters use input schemas so fields with server defaults remain optional (for example, `holdMinutes`, `page`, `pageSize` and `sort`). A 204 response has no content schema.
 
+Input instants accept whole seconds or one to three fractional-second digits. Greater precision is rejected with `400 INVALID_INPUT` before converting to JavaScript Date/MySQL TIMESTAMP(3), preventing silent truncation in interval/deadline comparisons. This applies to program times, special deadlines and list from/to filters. Deadlines equal to program start remain valid. Recurring HH:mm inputs are unchanged.
+
 | Method/path | Contract |
 | --- | --- |
 | `GET /api/v1/programs` | Shared pagination, search/kind/status/areaId/from/to filters, allowlisted stable sort |

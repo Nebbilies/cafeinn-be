@@ -7,6 +7,7 @@ import {
   completeProgram,
   createBatch,
   createProgram,
+  instant,
   listPrograms,
   patchProgram,
 } from "../src/modules/programs/programs.schema.ts";
@@ -108,6 +109,45 @@ test("special capacity is independent of seats; free surcharge and independent c
     ).toISOString(),
     "2026-11-27T12:40:00.000Z",
   );
+});
+
+test("program instants preserve millisecond precision and equal deadlines", async (context) => {
+  for (const offset of ["Z", "+07:00", "-05:00"]) {
+    for (const fraction of ["", ".1", ".12", ".123"]) {
+      const startsAt = `2026-11-27T12:00:00${fraction}${offset}`;
+      assert.equal(instant.safeParse(startsAt).success, true);
+      assert.equal(createProgram.safeParse({
+        ...special, startsAt, endsAt: `2026-11-27T13:00:00${offset}`,
+        specialEvent: { ...special.specialEvent, registrationDeadline: startsAt, cancellationDeadline: startsAt },
+      }).success, true);
+    }
+    for (const fraction of [".0001", ".0009", ".123456", ".0000"]) {
+      assert.equal(instant.safeParse(`2026-11-27T12:00:00${fraction}${offset}`).success, false);
+    }
+  }
+  const truncatedDeadline = {
+    ...special, startsAt: "2026-11-27T12:00:00.0001Z",
+    specialEvent: { ...special.specialEvent, registrationDeadline: "2026-11-27T12:00:00.0009Z" },
+  };
+  assert.equal(createProgram.safeParse(truncatedDeadline).success, false);
+  const base = await serve(createApp(), context);
+  const invalidInstant = "2026-11-27T12:00:00.0001Z";
+  for (const request of [
+    { path: "/programs", method: "POST", body: truncatedDeadline },
+    { path: "/programs", method: "POST", body: { ...special, endsAt: invalidInstant } },
+    { path: "/programs", method: "POST", body: { ...special, specialEvent: { ...special.specialEvent, cancellationDeadline: invalidInstant } } },
+    { path: "/programs/1", method: "PATCH", body: { revision: 1, startsAt: invalidInstant } },
+    { path: "/programs?" + new URLSearchParams({ from: invalidInstant }), method: "GET" },
+    { path: "/programs?" + new URLSearchParams({ to: invalidInstant }), method: "GET" },
+  ]) {
+    const response = await fetch(base + "/api/v1" + request.path, {
+      method: request.method,
+      headers: { "content-type": "application/json", cookie: "cafeinn_session=" + "a".repeat(64) },
+      ...("body" in request ? { body: JSON.stringify(request.body) } : {}),
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.code, "INVALID_INPUT");
+  }
 });
 
 test("strict content/type/edit validation preserves state ownership", () => {

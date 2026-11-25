@@ -623,6 +623,14 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
         ).status,
         201,
       );
+      // Each decoy matches if only its corresponding wildcard is left unescaped.
+      for (const [day, decoyName] of [
+        ["2026-12-24", "literalXYZ_\\tune"],
+        ["2026-12-25", "literal%X\\tune"],
+      ] as const) {
+        const decoy = await request("/programs", "POST", input(day, { name: decoyName }));
+        assert.equal(decoy.status, 201);
+      }
       const baseQuery = {
         search: name,
         areaId: String(area.id),
@@ -645,6 +653,9 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
         totalItems: 2,
         totalPages: 2,
       });
+      const completePage = await page();
+      assert.deepEqual(completePage.items, [first, second]);
+      assert.equal(completePage.pagination.totalItems, 2);
       assert.deepEqual((await page({ page: "2", pageSize: "1" })).items, [
         second,
       ]);
@@ -700,7 +711,8 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
       let readingPage = false;
       let deleted = false;
       // Instrument real SQL completion, not its results: another actor commits the delete
-      // after the first page read. The old count/findMany implementation returns a mismatch.
+      // after the first page read, regardless of split-read order. A single statement
+      // retains its result; either split-read order observes deletion on its second read.
       const reader = db.$extends({
         query: {
           async $allOperations({ model, operation, args, query }) {
@@ -708,7 +720,7 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
             if (
               readingPage &&
               !deleted &&
-              ((model === "Program" && operation === "count") ||
+              ((model === "Program" && (operation === "count" || operation === "findMany")) ||
                 operation === "$queryRaw")
             ) {
               deleted = true;
