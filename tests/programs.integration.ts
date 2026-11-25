@@ -125,11 +125,10 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
     const response = await request("/recurring-batches/preview", "POST", input);
     assert.equal(response.status, 200);
     const body = await response.json();
-    assert.deepEqual(Object.keys(body).sort((left, right) => left.localeCompare(right)), [
-      "candidateCount",
-      "occurrences",
-      "validCount",
-    ]);
+    assert.deepEqual(
+      Object.keys(body).sort((left, right) => left.localeCompare(right)),
+      ["candidateCount", "occurrences", "validCount"],
+    );
     return body;
   }
 
@@ -336,7 +335,10 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
           secondCookie,
         ),
       ]);
-      assert.deepEqual([a.status, b.status].sort((left, right) => left - right), [201, 409]);
+      assert.deepEqual(
+        [a.status, b.status].sort((left, right) => left - right),
+        [201, 409],
+      );
       const mixed = batch("2026-12-10");
       await preview(mixed);
       const pair = await Promise.all([
@@ -353,53 +355,83 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
     },
   );
 
-  await context.test("mixed valid and stale selected dates leave no partial batch, programs or audits", async () => {
-    const validDate = "2026-12-22";
-    const conflictingDate = "2026-12-23";
-    const rule = batch(validDate, { toDate: conflictingDate });
-    const reviewed = await preview(rule);
-    assert.equal(reviewed.candidateCount, 2);
-    assert.equal(reviewed.validCount, 2);
-    const blockerResponse = await request("/programs", "POST", input(conflictingDate), secondCookie);
-    assert.equal(blockerResponse.status, 201);
-    const blocker = await blockerResponse.json();
-    const before = {
-      batches: await db.recurringBatch.count(),
-      programs: await db.program.count(),
-      audits: await db.auditLog.count(),
-    };
-    // The valid date is first so an incremental writer cannot hide a partial commit.
-    const stale = await request("/recurring-batches", "POST", {
-      input: rule, selectedDates: [validDate, conflictingDate],
-    });
-    assert.equal(stale.status, 409);
-    assert.equal((await stale.json()).error.code, "PREVIEW_STALE");
-    assert.deepEqual({
-      batches: await db.recurringBatch.count(),
-      programs: await db.program.count(),
-      audits: await db.auditLog.count(),
-    }, before);
-    assert.ok(await db.program.findUnique({ where: { id: blocker.id } }));
+  await context.test(
+    "mixed valid and stale selected dates leave no partial batch, programs or audits",
+    async () => {
+      const validDate = "2026-12-22";
+      const conflictingDate = "2026-12-23";
+      const rule = batch(validDate, { toDate: conflictingDate });
+      const reviewed = await preview(rule);
+      assert.equal(reviewed.candidateCount, 2);
+      assert.equal(reviewed.validCount, 2);
+      const blockerResponse = await request(
+        "/programs",
+        "POST",
+        input(conflictingDate),
+        secondCookie,
+      );
+      assert.equal(blockerResponse.status, 201);
+      const blocker = await blockerResponse.json();
+      const before = {
+        batches: await db.recurringBatch.count(),
+        programs: await db.program.count(),
+        audits: await db.auditLog.count(),
+      };
+      // The valid date is first so an incremental writer cannot hide a partial commit.
+      const stale = await request("/recurring-batches", "POST", {
+        input: rule,
+        selectedDates: [validDate, conflictingDate],
+      });
+      assert.equal(stale.status, 409);
+      assert.equal((await stale.json()).error.code, "PREVIEW_STALE");
+      assert.deepEqual(
+        {
+          batches: await db.recurringBatch.count(),
+          programs: await db.program.count(),
+          audits: await db.auditLog.count(),
+        },
+        before,
+      );
+      assert.ok(await db.program.findUnique({ where: { id: blocker.id } }));
 
-    const accepted = await request("/recurring-batches", "POST", {
-      input: rule, selectedDates: [validDate],
-    });
-    assert.equal(accepted.status, 201);
-    const result = await accepted.json();
-    assert.equal(result.createdCount, 1);
-    assert.equal(result.programIds.length, 1);
-    const createdBatch = await db.recurringBatch.findUniqueOrThrow({ where: { id: result.batchId } });
-    assert.equal(createdBatch.createdCount, 1);
-    const children = await db.program.findMany({ where: { recurringBatchId: result.batchId } });
-    assert.deepEqual(children.map(row => row.id), result.programIds);
-    assert.equal(children[0]!.startsAt.toISOString(), new Date(`${validDate}T19:00:00+07:00`).toISOString());
-    assert.equal(children[0]!.kind, "RECURRING");
-    assert.deepEqual({
-      batches: await db.recurringBatch.count(),
-      programs: await db.program.count(),
-      audits: await db.auditLog.count(),
-    }, { batches: before.batches + 1, programs: before.programs + 1, audits: before.audits + 2 });
-  });
+      const accepted = await request("/recurring-batches", "POST", {
+        input: rule,
+        selectedDates: [validDate],
+      });
+      assert.equal(accepted.status, 201);
+      const result = await accepted.json();
+      assert.equal(result.createdCount, 1);
+      assert.equal(result.programIds.length, 1);
+      const createdBatch = await db.recurringBatch.findUniqueOrThrow({
+        where: { id: result.batchId },
+      });
+      assert.equal(createdBatch.createdCount, 1);
+      const children = await db.program.findMany({
+        where: { recurringBatchId: result.batchId },
+      });
+      assert.deepEqual(
+        children.map((row) => row.id),
+        result.programIds,
+      );
+      assert.equal(
+        children[0]!.startsAt.toISOString(),
+        new Date(`${validDate}T19:00:00+07:00`).toISOString(),
+      );
+      assert.equal(children[0]!.kind, "RECURRING");
+      assert.deepEqual(
+        {
+          batches: await db.recurringBatch.count(),
+          programs: await db.program.count(),
+          audits: await db.auditLog.count(),
+        },
+        {
+          batches: before.batches + 1,
+          programs: before.programs + 1,
+          audits: before.audits + 2,
+        },
+      );
+    },
+  );
 
   await context.test(
     "out-of-rule dates fail without writes; creation does not require a prior preview",
@@ -444,7 +476,9 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
       let transactionError: unknown;
       const originalTransaction = db.$transaction;
       // Observe the real server transaction failure; do not replace SQL or expose it over HTTP.
-      db.$transaction = (async (...args: Parameters<typeof db.$transaction>) => {
+      db.$transaction = (async (
+        ...args: Parameters<typeof db.$transaction>
+      ) => {
         try {
           return await originalTransaction.apply(db, args);
         } catch (error) {
@@ -454,15 +488,23 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
       }) as typeof db.$transaction;
       try {
         // MySQL CREATE TRIGGER needs text-query DDL, on the disposable target only.
-        const connection = await mariadb.createConnection(createDatabaseOptions(target));
+        const connection = await mariadb.createConnection(
+          createDatabaseOptions(target),
+        );
         await withRollbackTrigger(connection, async () => {
           const failed = await request("/recurring-batches", "POST", body);
           assert.equal(failed.status, 500);
           assert.deepEqual(await failed.json(), {
-            error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." },
+            error: {
+              code: "INTERNAL_ERROR",
+              message: "An unexpected error occurred.",
+            },
           });
           assert.ok(transactionError instanceof Error);
-          assert.match(transactionError.message, /program_test_rollback: RECURRING_GENERATED/);
+          assert.match(
+            transactionError.message,
+            /program_test_rollback: RECURRING_GENERATED/,
+          );
         });
       } finally {
         db.$transaction = originalTransaction;
@@ -480,11 +522,18 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
       const result = await retried.json();
       assert.equal(result.createdCount, 1);
       assert.equal(result.programIds.length, 1);
-      assert.deepEqual({
-        batches: await db.recurringBatch.count(),
-        programs: await db.program.count(),
-        audits: await db.auditLog.count(),
-      }, { batches: before.batches + 1, programs: before.programs + 1, audits: before.audits + 2 });
+      assert.deepEqual(
+        {
+          batches: await db.recurringBatch.count(),
+          programs: await db.program.count(),
+          audits: await db.auditLog.count(),
+        },
+        {
+          batches: before.batches + 1,
+          programs: before.programs + 1,
+          audits: before.audits + 2,
+        },
+      );
     },
   );
 
@@ -533,71 +582,178 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
     },
   );
 
-  await context.test("listing preserves literal search, filters, DTOs, stable sorting and empty-page totals", async () => {
-    const name = "literal%_\\tune";
-    const firstResponse = await request("/programs", "POST", input("2026-12-18", {
-      name, coverImageUrl: "https://example.test/list-cover.png",
-    }));
-    assert.equal(firstResponse.status, 201);
-    const first = await firstResponse.json();
-    const secondResponse = await request("/programs", "POST", input("2026-12-19", { name }));
-    assert.equal(secondResponse.status, 201);
-    const second = await secondResponse.json();
-    assert.equal((await request("/programs", "POST", input("2026-12-20", { name, areaId: other.id }))).status, 201);
-    assert.equal((await request("/programs", "POST", input("2026-12-21", { name: "literalXYZtune" }))).status, 201);
-    const baseQuery = { search: name, areaId: String(area.id), kind: "SPECIAL", status: "DRAFT", sort: "name.desc" };
-    async function page(extra: Record<string, string> = {}) {
-      const response = await request("/programs?" + new URLSearchParams({ ...baseQuery, ...extra }));
-      assert.equal(response.status, 200);
-      return response.json();
-    }
-    const firstPage = await page({ pageSize: "1" });
-    assert.deepEqual(firstPage.items, [first]);
-    assert.deepEqual(firstPage.pagination, { page: 1, pageSize: 1, totalItems: 2, totalPages: 2 });
-    assert.deepEqual((await page({ page: "2", pageSize: "1" })).items, [second]);
-    assert.deepEqual((await page({ sort: "startsAt.desc" })).items.map((item: { id: number }) => item.id), [second.id, first.id]);
-    assert.deepEqual((await page({ from: "2026-12-18T20:00:00+07:00", to: "2026-12-18T20:30:00+07:00" })).items, [first]);
-    const empty = await page({ from: "2026-12-18T21:00:00+07:00", to: "2026-12-19T19:00:00+07:00" });
-    assert.deepEqual(empty.items, []);
-    assert.equal(empty.pagination.totalItems, 0);
-    const beyond = await page({ page: "3", pageSize: "1" });
-    assert.deepEqual(beyond.items, []);
-    assert.equal(beyond.pagination.totalItems, 2);
-    assert.equal((await page({ kind: "RECURRING" })).pagination.totalItems, 0);
-    assert.equal((await page({ status: "CANCELLED" })).pagination.totalItems, 0);
-    assert.equal((await page({ search: "' OR 1=1 --" })).pagination.totalItems, 0);
-  });
+  await context.test(
+    "listing preserves literal search, filters, DTOs, stable sorting and empty-page totals",
+    async () => {
+      const name = "literal%_\\tune";
+      const firstResponse = await request(
+        "/programs",
+        "POST",
+        input("2026-12-18", {
+          name,
+          coverImageUrl: "https://example.test/list-cover.png",
+        }),
+      );
+      assert.equal(firstResponse.status, 201);
+      const first = await firstResponse.json();
+      const secondResponse = await request(
+        "/programs",
+        "POST",
+        input("2026-12-19", { name }),
+      );
+      assert.equal(secondResponse.status, 201);
+      const second = await secondResponse.json();
+      assert.equal(
+        (
+          await request(
+            "/programs",
+            "POST",
+            input("2026-12-20", { name, areaId: other.id }),
+          )
+        ).status,
+        201,
+      );
+      assert.equal(
+        (
+          await request(
+            "/programs",
+            "POST",
+            input("2026-12-21", { name: "literalXYZtune" }),
+          )
+        ).status,
+        201,
+      );
+      const baseQuery = {
+        search: name,
+        areaId: String(area.id),
+        kind: "SPECIAL",
+        status: "DRAFT",
+        sort: "name.desc",
+      };
+      async function page(extra: Record<string, string> = {}) {
+        const response = await request(
+          "/programs?" + new URLSearchParams({ ...baseQuery, ...extra }),
+        );
+        assert.equal(response.status, 200);
+        return response.json();
+      }
+      const firstPage = await page({ pageSize: "1" });
+      assert.deepEqual(firstPage.items, [first]);
+      assert.deepEqual(firstPage.pagination, {
+        page: 1,
+        pageSize: 1,
+        totalItems: 2,
+        totalPages: 2,
+      });
+      assert.deepEqual((await page({ page: "2", pageSize: "1" })).items, [
+        second,
+      ]);
+      assert.deepEqual(
+        (await page({ sort: "startsAt.desc" })).items.map(
+          (item: { id: number }) => item.id,
+        ),
+        [second.id, first.id],
+      );
+      assert.deepEqual(
+        (
+          await page({
+            from: "2026-12-18T20:00:00+07:00",
+            to: "2026-12-18T20:30:00+07:00",
+          })
+        ).items,
+        [first],
+      );
+      const empty = await page({
+        from: "2026-12-18T21:00:00+07:00",
+        to: "2026-12-19T19:00:00+07:00",
+      });
+      assert.deepEqual(empty.items, []);
+      assert.equal(empty.pagination.totalItems, 0);
+      const beyond = await page({ page: "3", pageSize: "1" });
+      assert.deepEqual(beyond.items, []);
+      assert.equal(beyond.pagination.totalItems, 2);
+      assert.equal(
+        (await page({ kind: "RECURRING" })).pagination.totalItems,
+        0,
+      );
+      assert.equal(
+        (await page({ status: "CANCELLED" })).pagination.totalItems,
+        0,
+      );
+      assert.equal(
+        (await page({ search: "' OR 1=1 --" })).pagination.totalItems,
+        0,
+      );
+    },
+  );
 
-  await context.test("listing count and items retain one snapshot across a concurrent deletion", async () => {
-    const response = await request("/programs", "POST", input("2026-12-17", { name: "snapshot-reader-fixture" }));
-    assert.equal(response.status, 201);
-    const row = await response.json();
-    let readingPage = false;
-    let deleted = false;
-    // Instrument real SQL completion, not its results: another actor commits the delete
-    // after the first page read. The old count/findMany implementation returns a mismatch.
-    const reader = db.$extends({ query: {
-      async $allOperations({ model, operation, args, query }) {
-        const result = await query(args);
-        if (readingPage && !deleted &&
-            ((model === "Program" && operation === "count") || operation === "$queryRaw")) {
-          deleted = true;
-          const removed = await request("/programs/" + row.id, "DELETE", { revision: 1 }, secondCookie);
-          assert.equal(removed.status, 204);
-          await removed.text();
-        }
-        return result;
-      },
-    } });
-    const page = await reader.$transaction(async tx => {
-      readingPage = true;
-      return findProgramPage(tx, listPrograms.parse({ search: "snapshot-reader-fixture", areaId: String(area.id) }));
-    }, { isolationLevel: "ReadCommitted", timeout: 15000 });
-    assert.equal(deleted, true, "the second actor must commit during the instrumented page read");
-    assert.equal(page.pagination.totalItems, 1);
-    assert.deepEqual(page.items.map(item => item.id), [row.id]);
-    assert.equal(await db.program.findUnique({ where: { id: row.id } }), null);
-  });
+  await context.test(
+    "listing count and items retain one snapshot across a concurrent deletion",
+    async () => {
+      const response = await request(
+        "/programs",
+        "POST",
+        input("2026-12-17", { name: "snapshot-reader-fixture" }),
+      );
+      assert.equal(response.status, 201);
+      const row = await response.json();
+      let readingPage = false;
+      let deleted = false;
+      // Instrument real SQL completion, not its results: another actor commits the delete
+      // after the first page read. The old count/findMany implementation returns a mismatch.
+      const reader = db.$extends({
+        query: {
+          async $allOperations({ model, operation, args, query }) {
+            const result = await query(args);
+            if (
+              readingPage &&
+              !deleted &&
+              ((model === "Program" && operation === "count") ||
+                operation === "$queryRaw")
+            ) {
+              deleted = true;
+              const removed = await request(
+                "/programs/" + row.id,
+                "DELETE",
+                { revision: 1 },
+                secondCookie,
+              );
+              assert.equal(removed.status, 204);
+              await removed.text();
+            }
+            return result;
+          },
+        },
+      });
+      const page = await reader.$transaction(
+        async (tx) => {
+          readingPage = true;
+          return findProgramPage(
+            tx,
+            listPrograms.parse({
+              search: "snapshot-reader-fixture",
+              areaId: String(area.id),
+            }),
+          );
+        },
+        { isolationLevel: "ReadCommitted", timeout: 15000 },
+      );
+      assert.equal(
+        deleted,
+        true,
+        "the second actor must commit during the instrumented page read",
+      );
+      assert.equal(page.pagination.totalItems, 1);
+      assert.deepEqual(
+        page.items.map((item) => item.id),
+        [row.id],
+      );
+      assert.equal(
+        await db.program.findUnique({ where: { id: row.id } }),
+        null,
+      );
+    },
+  );
 
   await context.test(
     "draft dependencies and published state block even metadata edits/deletes",

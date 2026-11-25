@@ -4,7 +4,10 @@ type TriggerConnection = {
 };
 
 /** Takes ownership of a fresh connection to the validated disposable test database. */
-export async function withRollbackTrigger(connection: TriggerConnection, run: () => Promise<void>) {
+export async function withRollbackTrigger(
+  connection: TriggerConnection,
+  run: () => Promise<void>,
+) {
   let created = false;
   try {
     await connection.query(
