@@ -75,10 +75,10 @@ const batch = z.object({
 const error = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
 });
-function content(schema: z.ZodType) {
+function content(schema: z.ZodType, io: "input" | "output") {
   return {
     "application/json": {
-      schema: z.toJSONSchema(schema, { target: "openapi-3.0", io: "input" }),
+      schema: z.toJSONSchema(schema, { target: "openapi-3.0", io }),
     },
   };
 }
@@ -95,11 +95,11 @@ function operation(
   const responses: Record<number, unknown> = {
     [options.status ?? 200]: {
       description: summary,
-      ...(options.output ? { content: content(options.output) } : {}),
+      ...(options.output ? { content: content(options.output, "output") } : {}),
     },
   };
   const errors: Record<number, string> = {
-    400: "INVALID_INPUT: strict input, same Vietnam date, independent deadlines <= start, or bounded selection validation failed.",
+    400: "INVALID_INPUT: malformed/disallowed cover URL, strict input, same Vietnam date, independent deadlines <= start, or bounded selection validation failed.",
     401: "SESSION_REQUIRED: missing, expired or ineligible staff session.",
     403: "FORBIDDEN (events.manage required) or ORIGIN_REJECTED.",
     404: "PROGRAM_NOT_FOUND, AREA_NOT_FOUND or RECURRING_BATCH_NOT_FOUND.",
@@ -108,7 +108,7 @@ function operation(
     500: "Sanitized INTERNAL_ERROR; no internal connection or query details.",
   };
   for (const [status, description] of Object.entries(errors))
-    responses[Number(status)] = { description, content: content(error) };
+    responses[Number(status)] = { description, content: content(error, "output") };
   return {
     tags: ["Programs"],
     summary,
@@ -128,7 +128,7 @@ function operation(
         }
       : {}),
     ...(options.input
-      ? { requestBody: { required: true, content: content(options.input) } }
+      ? { requestBody: { required: true, content: content(options.input, "input") } }
       : {}),
   };
 }
@@ -140,7 +140,7 @@ export const programPaths = {
     get: {
       ...operation(
         "List staff programs",
-        "Filtered totals before paging; page beyond end returns empty items. from/to select intersecting intervals, not start-date containment. Stable ID tie-breaker.",
+        "Filtered totals, page items and special-event configuration share one database snapshot. Page beyond end returns empty items with the filtered total. from/to select intersecting intervals, not start-date containment. Stable ID tie-breaker.",
         { output: paginatedResponse(program) },
       ),
       parameters: Object.entries({

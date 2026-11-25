@@ -1,5 +1,4 @@
 import { audit } from "../../common/audit/audit.ts";
-import type { Prisma } from "../../generated/prisma/client.ts";
 import { transaction } from "../../database/transaction.ts";
 import { authorize } from "../auth/auth.service.ts";
 import {
@@ -40,11 +39,6 @@ function specialData(event: NonNullable<ProgramInput["specialEvent"]>) {
   };
 }
 
-export function jsonSnapshot(value: unknown): Prisma.InputJsonValue {
-  // DTOs are constructed by this module from scalars/dates, never arbitrary client objects.
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
 export function list(token: string, query: ProgramList) {
   return transaction(async (tx) => {
     await authorize(tx, token, "events.manage");
@@ -82,7 +76,7 @@ export function create(token: string, input: ProgramInput) {
       employeeId: actor.id,
       entityType: "programs",
       entityKey: { id: row.id },
-      details: jsonSnapshot({ after: result }),
+      details: { after: result },
     });
     return result;
   });
@@ -135,7 +129,7 @@ export function update(token: string, id: number, patch: PatchProgram) {
       employeeId: actor.id,
       entityType: "programs",
       entityKey: { id },
-      details: jsonSnapshot({ before: dto, after: result }),
+      details: { before: dto, after: result },
     });
     return result;
   });
@@ -154,7 +148,7 @@ export function remove(token: string, id: number, revision: number) {
       employeeId: actor.id,
       entityType: "programs",
       entityKey: { id },
-      details: jsonSnapshot({ before: programDto(row) }),
+      details: { before: programDto(row) },
     });
   });
 }

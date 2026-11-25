@@ -7,20 +7,13 @@ import { hashPassword } from "../src/modules/auth/auth-password.ts";
 import { lockProgramContext } from "../src/modules/programs/programs.public.ts";
 import mariadb from "mariadb";
 import { createDatabaseOptions } from "../src/database/connection-options.ts";
+import { programTestDatabaseUrl } from "./support/program-test-database.ts";
+import { withRollbackTrigger } from "./support/rollback-trigger.ts";
+import { findProgramPage } from "../src/modules/programs/programs.repository.ts";
+import { listPrograms } from "../src/modules/programs/programs.schema.ts";
 
 // Explicit runner only; never executed by the ordinary offline *.test.ts suite.
-const target = process.env.PROGRAM_TEST_DATABASE_URL;
-if (!target)
-  throw new Error(
-    "PROGRAM_TEST_DATABASE_URL must select an isolated migrated local test database.",
-  );
-const url = new URL(target);
-if (
-  !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
-  !/^\/cafeinn_program_test_[a-z0-9_]+$/.test(url.pathname)
-) {
-  throw new Error("Refusing a non-local or non-test database.");
-}
+const target = programTestDatabaseUrl(process.env.PROGRAM_TEST_DATABASE_URL);
 process.env.DATABASE_URL = target;
 
 test("program contracts, transactions and concurrent writes on isolated MySQL", async (context) => {
@@ -132,7 +125,7 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
     const response = await request("/recurring-batches/preview", "POST", input);
     assert.equal(response.status, 200);
     const body = await response.json();
-    assert.deepEqual(Object.keys(body).sort(), [
+    assert.deepEqual(Object.keys(body).sort((left, right) => left.localeCompare(right)), [
       "candidateCount",
       "occurrences",
       "validCount",
@@ -160,12 +153,27 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
       assert.equal(row.specialEvent.capacityLimit, 1000);
       assert.equal(row.specialEvent.holdUntil, "2026-12-01T12:30:00.000Z");
       assert.equal(row.coverImageUrl, "https://example.test/cover.png");
+      const auditKey = {
+        entityType: "programs",
+        entityKey: { path: "$.id", equals: row.id },
+      };
+      const createdAudit = await db.auditLog.findFirstOrThrow({
+        where: { ...auditKey, action: "RECORD_CREATED" },
+      });
+      assert.deepEqual(createdAudit.details, { after: row });
       const edited = await request("/programs/" + row.id, "PATCH", {
         revision: row.revision,
         name: "Changed",
+        coverImageUrl: null,
       });
       assert.equal(edited.status, 200);
-      assert.equal((await edited.json()).revision, 2);
+      const updated = await edited.json();
+      assert.equal(updated.revision, 2);
+      assert.equal(updated.coverImageUrl, null);
+      const updatedAudit = await db.auditLog.findFirstOrThrow({
+        where: { ...auditKey, action: "RECORD_UPDATED" },
+      });
+      assert.deepEqual(updatedAudit.details, { before: row, after: updated });
       assert.equal(
         (
           await request("/programs/" + row.id, "PATCH", {
@@ -194,6 +202,10 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
         }),
         1,
       );
+      const deletedAudit = await db.auditLog.findFirstOrThrow({
+        where: { ...auditKey, action: "RECORD_DELETED" },
+      });
+      assert.deepEqual(deletedAudit.details, { before: updated });
     },
   );
 
@@ -204,7 +216,10 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
         request("/programs", "POST", input("2026-12-02")),
         request("/programs", "POST", input("2026-12-02"), secondCookie),
       ]);
-      assert.deepEqual(results.map((row) => row.status).sort(), [201, 409]);
+      assert.deepEqual(
+        results.map((row) => row.status).sort((left, right) => left - right),
+        [201, 409],
+      );
       const winner = await results.find((row) => row.status === 201)!.json();
       assert.equal(
         (
@@ -321,7 +336,7 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
           secondCookie,
         ),
       ]);
-      assert.deepEqual([a.status, b.status].sort(), [201, 409]);
+      assert.deepEqual([a.status, b.status].sort((left, right) => left - right), [201, 409]);
       const mixed = batch("2026-12-10");
       await preview(mixed);
       const pair = await Promise.all([
@@ -331,9 +346,60 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
         }),
         request("/programs", "POST", input("2026-12-10"), secondCookie),
       ]);
-      assert.deepEqual(pair.map((row) => row.status).sort(), [201, 409]);
+      assert.deepEqual(
+        pair.map((row) => row.status).sort((left, right) => left - right),
+        [201, 409],
+      );
     },
   );
+
+  await context.test("mixed valid and stale selected dates leave no partial batch, programs or audits", async () => {
+    const validDate = "2026-12-22";
+    const conflictingDate = "2026-12-23";
+    const rule = batch(validDate, { toDate: conflictingDate });
+    const reviewed = await preview(rule);
+    assert.equal(reviewed.candidateCount, 2);
+    assert.equal(reviewed.validCount, 2);
+    const blockerResponse = await request("/programs", "POST", input(conflictingDate), secondCookie);
+    assert.equal(blockerResponse.status, 201);
+    const blocker = await blockerResponse.json();
+    const before = {
+      batches: await db.recurringBatch.count(),
+      programs: await db.program.count(),
+      audits: await db.auditLog.count(),
+    };
+    // The valid date is first so an incremental writer cannot hide a partial commit.
+    const stale = await request("/recurring-batches", "POST", {
+      input: rule, selectedDates: [validDate, conflictingDate],
+    });
+    assert.equal(stale.status, 409);
+    assert.equal((await stale.json()).error.code, "PREVIEW_STALE");
+    assert.deepEqual({
+      batches: await db.recurringBatch.count(),
+      programs: await db.program.count(),
+      audits: await db.auditLog.count(),
+    }, before);
+    assert.ok(await db.program.findUnique({ where: { id: blocker.id } }));
+
+    const accepted = await request("/recurring-batches", "POST", {
+      input: rule, selectedDates: [validDate],
+    });
+    assert.equal(accepted.status, 201);
+    const result = await accepted.json();
+    assert.equal(result.createdCount, 1);
+    assert.equal(result.programIds.length, 1);
+    const createdBatch = await db.recurringBatch.findUniqueOrThrow({ where: { id: result.batchId } });
+    assert.equal(createdBatch.createdCount, 1);
+    const children = await db.program.findMany({ where: { recurringBatchId: result.batchId } });
+    assert.deepEqual(children.map(row => row.id), result.programIds);
+    assert.equal(children[0]!.startsAt.toISOString(), new Date(`${validDate}T19:00:00+07:00`).toISOString());
+    assert.equal(children[0]!.kind, "RECURRING");
+    assert.deepEqual({
+      batches: await db.recurringBatch.count(),
+      programs: await db.program.count(),
+      audits: await db.auditLog.count(),
+    }, { batches: before.batches + 1, programs: before.programs + 1, audits: before.audits + 2 });
+  });
 
   await context.test(
     "out-of-rule dates fail without writes; creation does not require a prior preview",
@@ -376,12 +442,9 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
       };
       // MySQL CREATE TRIGGER is not available in prepared statements; use the existing driver for test DDL only.
       const connection = await mariadb.createConnection(
-        createDatabaseOptions(target!),
+        createDatabaseOptions(target),
       );
-      await connection.query(
-        "CREATE TRIGGER program_test_rollback BEFORE INSERT ON audit_logs FOR EACH ROW BEGIN IF NEW.action = 'RECURRING_GENERATED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test-only failure'; END IF; END",
-      );
-      try {
+      await withRollbackTrigger(connection, async () => {
         assert.equal(
           (
             await request("/recurring-batches", "POST", {
@@ -391,13 +454,7 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
           ).status,
           500,
         );
-      } finally {
-        try {
-          await connection.query("DROP TRIGGER program_test_rollback");
-        } finally {
-          await connection.end();
-        }
-      }
+      });
       assert.deepEqual(
         {
           batches: await db.recurringBatch.count(),
@@ -425,7 +482,10 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
         request("/recurring-batches", "POST", body),
         request("/recurring-batches", "POST", body),
       ]);
-      assert.deepEqual(responses.map((row) => row.status).sort(), [201, 409]);
+      assert.deepEqual(
+        responses.map((row) => row.status).sort((left, right) => left - right),
+        [201, 409],
+      );
       const created = await responses.find((row) => row.status === 201)!.json();
       const id = created.programIds[0];
       const edits = await Promise.all([
@@ -440,13 +500,82 @@ test("program contracts, transactions and concurrent writes on isolated MySQL", 
           secondCookie,
         ),
       ]);
-      assert.deepEqual(edits.map((row) => row.status).sort(), [200, 409]);
+      assert.deepEqual(
+        edits.map((row) => row.status).sort((left, right) => left - right),
+        [200, 409],
+      );
       assert.equal(
         (await db.program.findUniqueOrThrow({ where: { id } })).revision,
         2,
       );
     },
   );
+
+  await context.test("listing preserves literal search, filters, DTOs, stable sorting and empty-page totals", async () => {
+    const name = "literal%_\\tune";
+    const firstResponse = await request("/programs", "POST", input("2026-12-18", {
+      name, coverImageUrl: "https://example.test/list-cover.png",
+    }));
+    assert.equal(firstResponse.status, 201);
+    const first = await firstResponse.json();
+    const secondResponse = await request("/programs", "POST", input("2026-12-19", { name }));
+    assert.equal(secondResponse.status, 201);
+    const second = await secondResponse.json();
+    assert.equal((await request("/programs", "POST", input("2026-12-20", { name, areaId: other.id }))).status, 201);
+    assert.equal((await request("/programs", "POST", input("2026-12-21", { name: "literalXYZtune" }))).status, 201);
+    const baseQuery = { search: name, areaId: String(area.id), kind: "SPECIAL", status: "DRAFT", sort: "name.desc" };
+    async function page(extra: Record<string, string> = {}) {
+      const response = await request("/programs?" + new URLSearchParams({ ...baseQuery, ...extra }));
+      assert.equal(response.status, 200);
+      return response.json();
+    }
+    const firstPage = await page({ pageSize: "1" });
+    assert.deepEqual(firstPage.items, [first]);
+    assert.deepEqual(firstPage.pagination, { page: 1, pageSize: 1, totalItems: 2, totalPages: 2 });
+    assert.deepEqual((await page({ page: "2", pageSize: "1" })).items, [second]);
+    assert.deepEqual((await page({ sort: "startsAt.desc" })).items.map((item: { id: number }) => item.id), [second.id, first.id]);
+    assert.deepEqual((await page({ from: "2026-12-18T20:00:00+07:00", to: "2026-12-18T20:30:00+07:00" })).items, [first]);
+    const empty = await page({ from: "2026-12-18T21:00:00+07:00", to: "2026-12-19T19:00:00+07:00" });
+    assert.deepEqual(empty.items, []);
+    assert.equal(empty.pagination.totalItems, 0);
+    const beyond = await page({ page: "3", pageSize: "1" });
+    assert.deepEqual(beyond.items, []);
+    assert.equal(beyond.pagination.totalItems, 2);
+    assert.equal((await page({ kind: "RECURRING" })).pagination.totalItems, 0);
+    assert.equal((await page({ status: "CANCELLED" })).pagination.totalItems, 0);
+    assert.equal((await page({ search: "' OR 1=1 --" })).pagination.totalItems, 0);
+  });
+
+  await context.test("listing count and items retain one snapshot across a concurrent deletion", async () => {
+    const response = await request("/programs", "POST", input("2026-12-17", { name: "snapshot-reader-fixture" }));
+    assert.equal(response.status, 201);
+    const row = await response.json();
+    let readingPage = false;
+    let deleted = false;
+    // Instrument real SQL completion, not its results: another actor commits the delete
+    // after the first page read. The old count/findMany implementation returns a mismatch.
+    const reader = db.$extends({ query: {
+      async $allOperations({ model, operation, args, query }) {
+        const result = await query(args);
+        if (readingPage && !deleted &&
+            ((model === "Program" && operation === "count") || operation === "$queryRaw")) {
+          deleted = true;
+          const removed = await request("/programs/" + row.id, "DELETE", { revision: 1 }, secondCookie);
+          assert.equal(removed.status, 204);
+          await removed.text();
+        }
+        return result;
+      },
+    } });
+    const page = await reader.$transaction(async tx => {
+      readingPage = true;
+      return findProgramPage(tx, listPrograms.parse({ search: "snapshot-reader-fixture", areaId: String(area.id) }));
+    }, { isolationLevel: "ReadCommitted", timeout: 15000 });
+    assert.equal(deleted, true, "the second actor must commit during the instrumented page read");
+    assert.equal(page.pagination.totalItems, 1);
+    assert.deepEqual(page.items.map(item => item.id), [row.id]);
+    assert.equal(await db.program.findUnique({ where: { id: row.id } }), null);
+  });
 
   await context.test(
     "draft dependencies and published state block even metadata edits/deletes",
