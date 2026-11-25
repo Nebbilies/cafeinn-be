@@ -14,6 +14,8 @@ Legacy nullable descriptions remain readable; creates and editable updates requi
 
 All routes require `cafeinn_session` and `events.manage`; ADMIN-only has no bypass. Staff origin checks and private/no-store headers cover both paths. Complete schemas/statuses/security are at `/api-docs.json` and `/api-docs/`.
 
+OpenAPI success/error schemas describe output objects with `additionalProperties: false`, including nested DTOs. Request bodies and query parameters use input schemas so fields with server defaults remain optional (for example, `holdMinutes`, `page`, `pageSize` and `sort`). A 204 response has no content schema.
+
 | Method/path | Contract |
 | --- | --- |
 | `GET /api/v1/programs` | Shared pagination, search/kind/status/areaId/from/to filters, allowlisted stable sort |
@@ -39,6 +41,8 @@ No durable replay/receipt store is used. Concurrent duplicate submissions cannot
 
 Authorization uses the existing ReadCommitted, 15-second transaction. Lock actor employee, then areas by ascending ID, then program. Area-row mutexes cover empty-scope conflicts. `Program.revision` protects stale edits.
 
+Program listing reads the filtered count, page and special-event configuration in one parameterized SQL statement, giving them one ReadCommitted snapshot even during concurrent changes. The totals anchor preserves filtered totals on empty or beyond-end pages. Sort identifiers/directions come from fixed allowlisted fragments, with ascending ID as the tie-breaker; filter values remain bound. Raw unsigned integers are normalized to the existing numeric DTO contract. Authorization and write transaction isolation remain unchanged.
+
 Other modules must call `lockProgramContext(tx, programId)` from `programs.public.ts` within their existing transaction before adding invitations, schedules or bookings. Lifecycle writers must preserve area/program ordering and validate availability when relevant; area status/deletion writers share the area lock. Public operations do not open nested transactions. These guarantees do not cover arbitrary writers ignoring the protocol.
 
 Only never-published dependency-free drafts can be edited/deleted. Even expired invitations or draft schedule versions block direct mutation; published/cancelled cases require coordinated flow. Delete intrinsic SpecialEvent configuration and Program together, preserving audit. Do not cascade external history. Keep original batch createdCount; remainingCount counts surviving programs; never automatically delete batch provenance.
@@ -49,6 +53,6 @@ Database scope is deliberately limited: no separate request/preview table. The o
 
 See the [verification record](program-verification.md) for actual recorded commands, scenario coverage, results and limits. Saving the report did not rerun tests or access a database.
 
-Run offline checks with existing scripts. `npm test` remains database-independent. `npm run test:programs:db` requires `PROGRAM_TEST_DATABASE_URL` selecting a fresh migrated loopback schema named `cafeinn_program_test_*`; it refuses demo/shared names. Arrange explicit disposable-schema creation/migration/cleanup, never reset `cafeinn_dev`. Trigger privileges are required for rollback fault injection. The suite does not migrate or clear arbitrary targets automatically.
+Run offline checks with existing scripts. `npm test` remains database-independent. `npm run test:programs:db` requires `PROGRAM_TEST_DATABASE_URL` selecting a fresh migrated loopback schema named `cafeinn_program_test_*`; it refuses demo/shared names, non-MySQL schemes, fragments and any query string. The test guard validates the target before either Prisma or the trigger connection can open. Runtime provider/TLS query configuration is unchanged. Arrange explicit disposable-schema creation/migration/cleanup, never reset `cafeinn_dev`. Trigger privileges are required for rollback fault injection. The suite does not migrate or clear arbitrary targets automatically.
 
 During implementation, all four migrations were executed on new temporary local MySQL schemas. Real HTTP/cookie tests covered permissions, special creation/edit/delete, overlap/adjacency/separate areas/cancellation, recurring selection/repeated-conflict behavior, stale previews, batch/batch and special/batch races, forced rollback and dependency guards. Temporary schemas were removed. This is local evidence, not shared deployment verification or proof of unimplemented module writers.

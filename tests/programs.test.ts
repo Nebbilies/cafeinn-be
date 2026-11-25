@@ -282,6 +282,31 @@ test("program HTTP boundary protects both paths without database access", async 
   assert.equal(listPrograms.safeParse({ areaId: "1e2" }).success, false);
 });
 
+test("malformed or disallowed cover URLs return 400 across program and batch routes", async (context) => {
+  const base = await serve(createApp(), context);
+  for (const coverImageUrl of ["https://example.test/cover.png", "http://example.test/cover.png", null, undefined]) {
+    assert.equal(createProgram.safeParse({ ...special, coverImageUrl }).success, true);
+    assert.equal(batchInput.safeParse({ ...batch, coverImageUrl }).success, true);
+  }
+  for (const coverImageUrl of ["not-a-url", "http://", "https://[::1", "", "/cover.png", "file:///tmp/cover.png", "https://user:pass@example.test/cover.png"]) {
+    const requests = [
+      { path: "/programs", method: "POST", body: { ...special, coverImageUrl } },
+      { path: "/programs/1", method: "PATCH", body: { revision: 1, coverImageUrl } },
+      { path: "/recurring-batches/preview", method: "POST", body: { ...batch, coverImageUrl } },
+      { path: "/recurring-batches", method: "POST", body: { input: { ...batch, coverImageUrl }, selectedDates: ["2026-11-29"] } },
+    ];
+    for (const request of requests) {
+      const response = await fetch(base + "/api/v1" + request.path, {
+        method: request.method,
+        headers: { "content-type": "application/json", cookie: "cafeinn_session=" + "a".repeat(64) },
+        body: JSON.stringify(request.body),
+      });
+      assert.equal(response.status, 400, `${request.method} ${request.path}: ${coverImageUrl}`);
+      assert.deepEqual(await response.json(), { error: { code: "INVALID_INPUT", message: "INVALID_INPUT" } });
+    }
+  }
+});
+
 test("OpenAPI exposes protected program contracts and shared pagination", async (context) => {
   const base = await serve(createApp(), context);
   const document = await (await fetch(base + "/api-docs.json")).json();
@@ -319,4 +344,51 @@ test("OpenAPI exposes protected program contracts and shared pagination", async 
     ].schema.required.sort(),
     ["items", "pagination"],
   );
+});
+
+test("program OpenAPI closes response objects while keeping defaulted inputs optional", async (context) => {
+  const base = await serve(createApp(), context);
+  const response = await fetch(base + "/api-docs.json");
+  assert.equal(response.status, 200);
+  const document = await response.json();
+  function assertClosedObjects(value: unknown) {
+    if (!value || typeof value !== "object") return;
+    if ("type" in value && value.type === "object") {
+      assert.ok("additionalProperties" in value);
+      assert.equal(value.additionalProperties, false);
+    }
+    for (const nested of Object.values(value)) assertClosedObjects(nested);
+  }
+  const endpoints = [
+    ["/api/v1/programs", ["get", "post"]],
+    ["/api/v1/programs/{id}", ["get", "patch", "delete"]],
+    ["/api/v1/recurring-batches/preview", ["post"]],
+    ["/api/v1/recurring-batches", ["post"]],
+    ["/api/v1/recurring-batches/{id}", ["get"]],
+  ] as const;
+  for (const [path, methods] of endpoints) {
+    for (const method of methods) {
+      const operation = document.paths[path][method];
+      for (const status of Object.keys(operation.responses)) {
+        const entry = operation.responses[status];
+        if (status === "204") {
+          assert.equal(entry.content, undefined);
+        } else {
+          assert.ok(entry.content?.["application/json"]?.schema);
+          assertClosedObjects(entry.content["application/json"].schema);
+        }
+      }
+    }
+  }
+  const programs = document.paths["/api/v1/programs"];
+  const specialInput = programs.post.requestBody.content["application/json"].schema.properties.specialEvent;
+  assert.equal(specialInput.properties.holdMinutes.default, 30);
+  assert.equal(specialInput.required.includes("holdMinutes"), false);
+  const specialOutput = programs.post.responses[201].content["application/json"].schema.properties.specialEvent;
+  assert.ok(specialOutput.required.includes("holdMinutes"));
+  for (const [name, defaultValue] of [["page", 1], ["pageSize", 10], ["sort", "startsAt.asc"]] as const) {
+    const parameter = programs.get.parameters.find((item: { name: string }) => item.name === name);
+    assert.equal(parameter.required, false);
+    assert.equal(parameter.schema.default, defaultValue);
+  }
 });
