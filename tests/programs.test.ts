@@ -14,9 +14,8 @@ import {
 import {
   expandRecurrence,
   holdUntil,
-  overlaps,
-  validInterval,
 } from "../src/modules/programs/recurrence.ts";
+import { overlaps, validInterval } from "../src/common/utils/time-interval.ts";
 import { selectedOccurrences } from "../src/modules/programs/recurring-input.ts";
 
 const special = {
@@ -116,33 +115,76 @@ test("program instants preserve millisecond precision and equal deadlines", asyn
     for (const fraction of ["", ".1", ".12", ".123"]) {
       const startsAt = `2026-11-27T12:00:00${fraction}${offset}`;
       assert.equal(instant.safeParse(startsAt).success, true);
-      assert.equal(createProgram.safeParse({
-        ...special, startsAt, endsAt: `2026-11-27T13:00:00${offset}`,
-        specialEvent: { ...special.specialEvent, registrationDeadline: startsAt, cancellationDeadline: startsAt },
-      }).success, true);
+      assert.equal(
+        createProgram.safeParse({
+          ...special,
+          startsAt,
+          endsAt: `2026-11-27T13:00:00${offset}`,
+          specialEvent: {
+            ...special.specialEvent,
+            registrationDeadline: startsAt,
+            cancellationDeadline: startsAt,
+          },
+        }).success,
+        true,
+      );
     }
     for (const fraction of [".0001", ".0009", ".123456", ".0000"]) {
-      assert.equal(instant.safeParse(`2026-11-27T12:00:00${fraction}${offset}`).success, false);
+      assert.equal(
+        instant.safeParse(`2026-11-27T12:00:00${fraction}${offset}`).success,
+        false,
+      );
     }
   }
   const truncatedDeadline = {
-    ...special, startsAt: "2026-11-27T12:00:00.0001Z",
-    specialEvent: { ...special.specialEvent, registrationDeadline: "2026-11-27T12:00:00.0009Z" },
+    ...special,
+    startsAt: "2026-11-27T12:00:00.0001Z",
+    specialEvent: {
+      ...special.specialEvent,
+      registrationDeadline: "2026-11-27T12:00:00.0009Z",
+    },
   };
   assert.equal(createProgram.safeParse(truncatedDeadline).success, false);
   const base = await serve(createApp(), context);
   const invalidInstant = "2026-11-27T12:00:00.0001Z";
   for (const request of [
     { path: "/programs", method: "POST", body: truncatedDeadline },
-    { path: "/programs", method: "POST", body: { ...special, endsAt: invalidInstant } },
-    { path: "/programs", method: "POST", body: { ...special, specialEvent: { ...special.specialEvent, cancellationDeadline: invalidInstant } } },
-    { path: "/programs/1", method: "PATCH", body: { revision: 1, startsAt: invalidInstant } },
-    { path: "/programs?" + new URLSearchParams({ from: invalidInstant }), method: "GET" },
-    { path: "/programs?" + new URLSearchParams({ to: invalidInstant }), method: "GET" },
+    {
+      path: "/programs",
+      method: "POST",
+      body: { ...special, endsAt: invalidInstant },
+    },
+    {
+      path: "/programs",
+      method: "POST",
+      body: {
+        ...special,
+        specialEvent: {
+          ...special.specialEvent,
+          cancellationDeadline: invalidInstant,
+        },
+      },
+    },
+    {
+      path: "/programs/1",
+      method: "PATCH",
+      body: { revision: 1, startsAt: invalidInstant },
+    },
+    {
+      path: "/programs?" + new URLSearchParams({ from: invalidInstant }),
+      method: "GET",
+    },
+    {
+      path: "/programs?" + new URLSearchParams({ to: invalidInstant }),
+      method: "GET",
+    },
   ]) {
     const response = await fetch(base + "/api/v1" + request.path, {
       method: request.method,
-      headers: { "content-type": "application/json", cookie: "cafeinn_session=" + "a".repeat(64) },
+      headers: {
+        "content-type": "application/json",
+        cookie: "cafeinn_session=" + "a".repeat(64),
+      },
       ...("body" in request ? { body: JSON.stringify(request.body) } : {}),
     });
     assert.equal(response.status, 400);
@@ -324,25 +366,72 @@ test("program HTTP boundary protects both paths without database access", async 
 
 test("malformed or disallowed cover URLs return 400 across program and batch routes", async (context) => {
   const base = await serve(createApp(), context);
-  for (const coverImageUrl of ["https://example.test/cover.png", "http://example.test/cover.png", null, undefined]) {
-    assert.equal(createProgram.safeParse({ ...special, coverImageUrl }).success, true);
-    assert.equal(batchInput.safeParse({ ...batch, coverImageUrl }).success, true);
+  for (const coverImageUrl of [
+    "https://example.test/cover.png",
+    "http://example.test/cover.png",
+    null,
+    undefined,
+  ]) {
+    assert.equal(
+      createProgram.safeParse({ ...special, coverImageUrl }).success,
+      true,
+    );
+    assert.equal(
+      batchInput.safeParse({ ...batch, coverImageUrl }).success,
+      true,
+    );
   }
-  for (const coverImageUrl of ["not-a-url", "http://", "https://[::1", "", "/cover.png", "file:///tmp/cover.png", "https://user:pass@example.test/cover.png"]) {
+  for (const coverImageUrl of [
+    "not-a-url",
+    "http://",
+    "https://[::1",
+    "",
+    "/cover.png",
+    "file:///tmp/cover.png",
+    "https://user:pass@example.test/cover.png",
+  ]) {
     const requests = [
-      { path: "/programs", method: "POST", body: { ...special, coverImageUrl } },
-      { path: "/programs/1", method: "PATCH", body: { revision: 1, coverImageUrl } },
-      { path: "/recurring-batches/preview", method: "POST", body: { ...batch, coverImageUrl } },
-      { path: "/recurring-batches", method: "POST", body: { input: { ...batch, coverImageUrl }, selectedDates: ["2026-11-29"] } },
+      {
+        path: "/programs",
+        method: "POST",
+        body: { ...special, coverImageUrl },
+      },
+      {
+        path: "/programs/1",
+        method: "PATCH",
+        body: { revision: 1, coverImageUrl },
+      },
+      {
+        path: "/recurring-batches/preview",
+        method: "POST",
+        body: { ...batch, coverImageUrl },
+      },
+      {
+        path: "/recurring-batches",
+        method: "POST",
+        body: {
+          input: { ...batch, coverImageUrl },
+          selectedDates: ["2026-11-29"],
+        },
+      },
     ];
     for (const request of requests) {
       const response = await fetch(base + "/api/v1" + request.path, {
         method: request.method,
-        headers: { "content-type": "application/json", cookie: "cafeinn_session=" + "a".repeat(64) },
+        headers: {
+          "content-type": "application/json",
+          cookie: "cafeinn_session=" + "a".repeat(64),
+        },
         body: JSON.stringify(request.body),
       });
-      assert.equal(response.status, 400, `${request.method} ${request.path}: ${coverImageUrl}`);
-      assert.deepEqual(await response.json(), { error: { code: "INVALID_INPUT", message: "INVALID_INPUT" } });
+      assert.equal(
+        response.status,
+        400,
+        `${request.method} ${request.path}: ${coverImageUrl}`,
+      );
+      assert.deepEqual(await response.json(), {
+        error: { code: "INVALID_INPUT", message: "INVALID_INPUT" },
+      });
     }
   }
 });
@@ -421,13 +510,23 @@ test("program OpenAPI closes response objects while keeping defaulted inputs opt
     }
   }
   const programs = document.paths["/api/v1/programs"];
-  const specialInput = programs.post.requestBody.content["application/json"].schema.properties.specialEvent;
+  const specialInput =
+    programs.post.requestBody.content["application/json"].schema.properties
+      .specialEvent;
   assert.equal(specialInput.properties.holdMinutes.default, 30);
   assert.equal(specialInput.required.includes("holdMinutes"), false);
-  const specialOutput = programs.post.responses[201].content["application/json"].schema.properties.specialEvent;
+  const specialOutput =
+    programs.post.responses[201].content["application/json"].schema.properties
+      .specialEvent;
   assert.ok(specialOutput.required.includes("holdMinutes"));
-  for (const [name, defaultValue] of [["page", 1], ["pageSize", 10], ["sort", "startsAt.asc"]] as const) {
-    const parameter = programs.get.parameters.find((item: { name: string }) => item.name === name);
+  for (const [name, defaultValue] of [
+    ["page", 1],
+    ["pageSize", 10],
+    ["sort", "startsAt.asc"],
+  ] as const) {
+    const parameter = programs.get.parameters.find(
+      (item: { name: string }) => item.name === name,
+    );
     assert.equal(parameter.required, false);
     assert.equal(parameter.schema.default, defaultValue);
   }

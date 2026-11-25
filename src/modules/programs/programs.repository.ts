@@ -1,9 +1,18 @@
 import { ApiError } from "../../common/api-error.ts";
 import { pageOffset, pageResult } from "../../common/pagination.ts";
-import { Prisma, type Program, type SpecialEvent } from "../../generated/prisma/client.ts";
+import {
+  Prisma,
+  type Program,
+  type SpecialEvent,
+} from "../../generated/prisma/client.ts";
 import type { Transaction } from "../../database/transaction.ts";
 import type { ProgramList } from "./programs.schema.ts";
 import { holdUntil } from "./recurrence.ts";
+import {
+  PROGRAM_KINDS,
+  PROGRAM_STATUSES,
+  TIME_RESERVING_STATUSES,
+} from "./constants/program.constants.ts";
 
 export const programInclude = { specialEvent: true } as const;
 export type StoredProgram = Prisma.ProgramGetPayload<{
@@ -43,8 +52,8 @@ export function programDto(row: StoredProgram) {
         }
       : null,
     bookingAllowed:
-      row.kind === "SPECIAL" &&
-      row.status === "PUBLISHED" &&
+      row.kind === PROGRAM_KINDS.SPECIAL &&
+      row.status === PROGRAM_STATUSES.PUBLISHED &&
       !!row.specialEvent &&
       row.specialEvent.registrationDeadline > new Date() &&
       row.startsAt > new Date(),
@@ -89,7 +98,7 @@ export function findConflicts(
   return tx.program.findMany({
     where: {
       areaId,
-      status: { in: ["DRAFT", "PUBLISHED"] },
+      status: { in: TIME_RESERVING_STATUSES },
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
       ...(exceptId ? { id: { not: exceptId } } : {}),
@@ -104,7 +113,10 @@ export async function requireEditable(
   row: StoredProgram,
   revision: number,
 ) {
-  if (row.status !== "DRAFT" || row.publishedScheduleVersionId !== null) {
+  if (
+    row.status !== PROGRAM_STATUSES.DRAFT ||
+    row.publishedScheduleVersionId !== null
+  ) {
     throw new ApiError(409, "PROGRAM_CHANGE_REQUIRES_COORDINATION");
   }
   if (row.revision !== revision) throw new ApiError(409, "STALE_PROGRAM");
@@ -127,32 +139,49 @@ export async function requireEditable(
     throw new ApiError(409, "PROGRAM_CHANGE_REQUIRES_COORDINATION");
 }
 
-type SpecialPageColumns = { specialProgramId: null } | (
-  Omit<SpecialEvent, "programId" | "createdAt" | "updatedAt" | "surchargePerPerson"> & {
-    surchargePerPerson: number | bigint;
-    specialProgramId: number; specialCreatedAt: Date; specialUpdatedAt: Date;
-  }
-);
+type SpecialPageColumns =
+  | { specialProgramId: null }
+  | (Omit<
+      SpecialEvent,
+      "programId" | "createdAt" | "updatedAt" | "surchargePerPerson"
+    > & {
+      surchargePerPerson: number | bigint;
+      specialProgramId: number;
+      specialCreatedAt: Date;
+      specialUpdatedAt: Date;
+    });
 type ProgramPageRow = { totalItems: bigint } & (
-  { id: null } | (Omit<Program, "revision"> & { revision: number | bigint } & SpecialPageColumns)
+  | { id: null }
+  | (Omit<Program, "revision"> & {
+      revision: number | bigint;
+    } & SpecialPageColumns)
 );
 
-export async function findProgramPage(tx: Pick<Transaction, "$queryRaw">, query: ProgramList) {
+export async function findProgramPage(
+  tx: Pick<Transaction, "$queryRaw">,
+  query: ProgramList,
+) {
   const search = query.search?.replace(/[\\%_]/g, String.raw`\$&`);
   const filters: Prisma.Sql[] = [];
-  if (query.areaId !== undefined) filters.push(Prisma.sql`p.area_id = ${query.areaId}`);
+  if (query.areaId !== undefined)
+    filters.push(Prisma.sql`p.area_id = ${query.areaId}`);
   if (query.kind) filters.push(Prisma.sql`p.kind = ${query.kind}`);
   if (query.status) filters.push(Prisma.sql`p.status = ${query.status}`);
   if (search) {
     const pattern = `%${search}%`;
-    filters.push(Prisma.sql`(p.name LIKE ${pattern} OR p.description LIKE ${pattern})`);
+    filters.push(
+      Prisma.sql`(p.name LIKE ${pattern} OR p.description LIKE ${pattern})`,
+    );
   }
   if (query.from) filters.push(Prisma.sql`p.ends_at > ${new Date(query.from)}`);
   if (query.to) filters.push(Prisma.sql`p.starts_at < ${new Date(query.to)}`);
-  const where = filters.length ? Prisma.join(filters, " AND ") : Prisma.sql`TRUE`;
+  const where = filters.length
+    ? Prisma.join(filters, " AND ")
+    : Prisma.sql`TRUE`;
   const [field, direction] = query.sort.split(".");
   // Only fixed SQL fragments select identifiers/direction; all filter values are bound.
-  const column = field === "name" ? Prisma.sql`p.name` : Prisma.sql`p.starts_at`;
+  const column =
+    field === "name" ? Prisma.sql`p.name` : Prisma.sql`p.starts_at`;
   const order = direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
   const orderBy = Prisma.sql`${column} ${order}, p.id ASC`;
   // One statement gives count, page and configuration the same ReadCommitted snapshot.
@@ -181,16 +210,25 @@ export async function findProgramPage(tx: Pick<Transaction, "$queryRaw">, query:
     LEFT JOIN special_events s ON s.program_id = p.id
     ORDER BY ${orderBy}
   `;
-  const items = rows.flatMap(row => {
+  const items = rows.flatMap((row) => {
     if (row.id === null) return [];
-    const specialEvent = row.specialProgramId === null ? null : {
-      programId: row.specialProgramId, capacityLimit: row.capacityLimit,
-      // Raw MySQL UNSIGNED INT values can arrive as bigint; their range is safe as number.
-      surchargePerPerson: Number(row.surchargePerPerson), registrationDeadline: row.registrationDeadline,
-      cancellationDeadline: row.cancellationDeadline, holdMinutes: row.holdMinutes,
-      createdAt: row.specialCreatedAt, updatedAt: row.specialUpdatedAt,
-    };
-    return [programDto({ ...row, revision: Number(row.revision), specialEvent })];
+    const specialEvent =
+      row.specialProgramId === null
+        ? null
+        : {
+            programId: row.specialProgramId,
+            capacityLimit: row.capacityLimit,
+            // Raw MySQL UNSIGNED INT values can arrive as bigint; their range is safe as number.
+            surchargePerPerson: Number(row.surchargePerPerson),
+            registrationDeadline: row.registrationDeadline,
+            cancellationDeadline: row.cancellationDeadline,
+            holdMinutes: row.holdMinutes,
+            createdAt: row.specialCreatedAt,
+            updatedAt: row.specialUpdatedAt,
+          };
+    return [
+      programDto({ ...row, revision: Number(row.revision), specialEvent }),
+    ];
   });
   return pageResult(items, query, Number(rows[0]?.totalItems ?? 0));
 }

@@ -1,5 +1,25 @@
 import { z } from "zod";
 import {
+  DEFAULT_HOLD_MINUTES,
+  MAX_AREA_ID,
+  MAX_CAPACITY_LIMIT,
+  MAX_HOLD_MINUTES,
+  MAX_PROGRAM_ID,
+  MAX_SURCHARGE_PER_PERSON,
+  MIN_CAPACITY_LIMIT,
+  MIN_HOLD_MINUTES,
+  MIN_SURCHARGE_PER_PERSON,
+} from "../modules/programs/constants/program-limits.constants.ts";
+import {
+  MAX_RECURRENCE_DAYS,
+  MAX_SELECTED_DATES,
+} from "../modules/programs/constants/recurrence.constants.ts";
+import {
+  EVENTS_MANAGE_PERMISSION,
+  PROGRAM_KINDS,
+  PROGRAM_STATUSES,
+} from "../modules/programs/constants/program.constants.ts";
+import {
   paginatedResponse,
   paginationParameters,
 } from "../common/pagination.ts";
@@ -14,11 +34,14 @@ import {
 
 const timestamp = z.iso.datetime({ offset: true });
 const special = z.object({
-  capacityLimit: z.int().min(1).max(65535),
-  surchargePerPerson: z.int().min(0).max(4294967295),
+  capacityLimit: z.int().min(MIN_CAPACITY_LIMIT).max(MAX_CAPACITY_LIMIT),
+  surchargePerPerson: z
+    .int()
+    .min(MIN_SURCHARGE_PER_PERSON)
+    .max(MAX_SURCHARGE_PER_PERSON),
   registrationDeadline: timestamp,
   cancellationDeadline: timestamp,
-  holdMinutes: z.int().min(1).max(65535),
+  holdMinutes: z.int().min(MIN_HOLD_MINUTES).max(MAX_HOLD_MINUTES),
   holdUntil: timestamp,
 });
 const program = z.object({
@@ -28,10 +51,10 @@ const program = z.object({
   description: z.string().nullable(),
   coverImageUrl: z.string().nullable(),
   revision: z.int().positive(),
-  kind: z.enum(["SPECIAL", "RECURRING"]),
+  kind: z.enum(PROGRAM_KINDS),
   startsAt: timestamp,
   endsAt: timestamp,
-  status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED"]),
+  status: z.enum(PROGRAM_STATUSES),
   recurringBatchId: z.int().nullable(),
   publishedScheduleVersionId: z.int().nullable(),
   createdAt: timestamp,
@@ -101,14 +124,17 @@ function operation(
   const errors: Record<number, string> = {
     400: "INVALID_INPUT: malformed/disallowed cover URL, instant precision above three fractional-second digits, strict input, same Vietnam date, independent deadlines <= start, or bounded selection validation failed.",
     401: "SESSION_REQUIRED: missing, expired or ineligible staff session.",
-    403: "FORBIDDEN (events.manage required) or ORIGIN_REJECTED.",
+    403: `FORBIDDEN (${EVENTS_MANAGE_PERMISSION} required) or ORIGIN_REJECTED.`,
     404: "PROGRAM_NOT_FOUND, AREA_NOT_FOUND or RECURRING_BATCH_NOT_FOUND.",
     409: "PROGRAM_TIME_CONFLICT, STALE_PROGRAM, PROGRAM_CHANGE_REQUIRES_COORDINATION, or PREVIEW_STALE.",
     422: "AREA_UNAVAILABLE: not an active, non-deleted acoustic area.",
     500: "Sanitized INTERNAL_ERROR; no internal connection or query details.",
   };
   for (const [status, description] of Object.entries(errors))
-    responses[Number(status)] = { description, content: content(error, "output") };
+    responses[Number(status)] = {
+      description,
+      content: content(error, "output"),
+    };
   return {
     tags: ["Programs"],
     summary,
@@ -122,18 +148,22 @@ function operation(
               in: "path",
               name: "id",
               required: true,
-              schema: { type: "integer", minimum: 1, maximum: 2147483647 },
+              schema: { type: "integer", minimum: 1, maximum: MAX_PROGRAM_ID },
             },
           ],
         }
       : {}),
     ...(options.input
-      ? { requestBody: { required: true, content: content(options.input, "input") } }
+      ? {
+          requestBody: {
+            required: true,
+            content: content(options.input, "input"),
+          },
+        }
       : {}),
   };
 }
-const intervalRules =
-  "Requires events.manage. DRAFT and PUBLISHED reserve their acoustic area; CANCELLED releases it. Intervals are half-open, adjacency is valid, and both types stay within one Asia/Ho_Chi_Minh date. ISO instants require an offset and at most three fractional-second digits; whole seconds are accepted. Public content is required; coverImageUrl is optional and never fetched/uploaded by this API.";
+const intervalRules = `Requires ${EVENTS_MANAGE_PERMISSION}. DRAFT and PUBLISHED reserve their acoustic area; CANCELLED releases it. Intervals are half-open, adjacency is valid, and both types stay within one Asia/Ho_Chi_Minh date. ISO instants require an offset and at most three fractional-second digits; whole seconds are accepted. Public content is required; coverImageUrl is optional and never fetched/uploaded by this API.`;
 
 export const programPaths = {
   "/api/v1/programs": {
@@ -146,7 +176,7 @@ export const programPaths = {
       parameters: Object.entries({
         ...paginationParameters,
         ...programListParameters,
-        areaId: z.int().positive().max(2147483647).optional(),
+        areaId: z.int().positive().max(MAX_AREA_ID).optional(),
       }).map(([name, schema]) => ({
         in: "query",
         name,
@@ -157,7 +187,7 @@ export const programPaths = {
     post: operation(
       "Create a special draft",
       intervalRules +
-        " Capacity is independent of seats; surcharge 0 is free. Registration/self-cancellation deadlines independently do not exceed start; hold defaults to 30 minutes and is capped by end.",
+        ` Capacity is independent of seats; surcharge 0 is free. Registration/self-cancellation deadlines independently do not exceed start; hold defaults to ${DEFAULT_HOLD_MINUTES} minutes and is capped by end.`,
       { input: createProgram, output: program, status: 201 },
     ),
   },
@@ -183,14 +213,14 @@ export const programPaths = {
     post: operation(
       "Preview recurring candidates",
       intervalRules +
-        " Range is inclusive, at most 366 days. Distinct weekdays; HH:mm start < end. Lists conflicts without creating domain rows or reserving dates. Advisory only: creation recomputes candidates and conflicts. No preview token or separate secret. Session activity can refresh.",
+        ` Range is inclusive, at most ${MAX_RECURRENCE_DAYS} days. Distinct weekdays; HH:mm start < end. Lists conflicts without creating domain rows or reserving dates. Advisory only: creation recomputes candidates and conflicts. No preview token or separate secret. Session activity can refresh.`,
       { input: batchInput, output: preview },
     ),
   },
   "/api/v1/recurring-batches": {
     post: operation(
       "Create selected recurring drafts",
-      "Requires input and 1-100 distinct selectedDates belonging to that recurrence rule. Out-of-rule dates return INVALID_INPUT. Recomputes eligibility under area lock and creates the selected set atomically; any selected conflict causes PREVIEW_STALE with no domain writes. No proof of a prior preview is required. Empty selection is rejected without writes. No booking/check-in/surcharge configuration. No durable request replay: resubmitting while the created drafts still reserve those intervals returns PREVIEW_STALE. After their deletion/cancellation/time change, a new submission can create a new batch.",
+      `Requires input and 1-${MAX_SELECTED_DATES} distinct selectedDates belonging to that recurrence rule. Out-of-rule dates return INVALID_INPUT. Recomputes eligibility under area lock and creates the selected set atomically; any selected conflict causes PREVIEW_STALE with no domain writes. No proof of a prior preview is required. Empty selection is rejected without writes. No booking/check-in/surcharge configuration. No durable request replay: resubmitting while the created drafts still reserve those intervals returns PREVIEW_STALE. After their deletion/cancellation/time change, a new submission can create a new batch.`,
       { input: createBatch, output: batchCreated, status: 201 },
     ),
   },

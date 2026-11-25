@@ -2,17 +2,24 @@ import { ApiError } from "../../common/api-error.ts";
 import { audit } from "../../common/audit/audit.ts";
 import { transaction } from "../../database/transaction.ts";
 import { authorize } from "../auth/auth.service.ts";
+import { TIME_ANCHOR_DATE } from "../../common/constants/time.constants.ts";
+import {
+  EVENTS_MANAGE_PERMISSION,
+  PROGRAM_KINDS,
+  PROGRAM_STATUSES,
+} from "./constants/program.constants.ts";
 import type { BatchInput, CreateBatch } from "./programs.schema.ts";
 import { lockAreas, requireArea } from "./programs.repository.ts";
 import {
   previewOccurrences,
   readBatch,
 } from "./recurring-batches.repository.ts";
-import { normalizeBatch, selectedOccurrences } from "./recurring-input.ts";
+import { selectedOccurrences } from "./recurring-input.ts";
+import { normalizeBatch } from "./utils/normalize-batch.ts";
 
 export function preview(token: string, rawInput: BatchInput) {
   return transaction(async (tx) => {
-    await authorize(tx, token, "events.manage");
+    await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     const input = normalizeBatch(rawInput);
     await lockAreas(tx, [input.areaId]);
     await requireArea(tx, input.areaId);
@@ -30,7 +37,7 @@ export function preview(token: string, rawInput: BatchInput) {
 
 export function create(token: string, request: CreateBatch) {
   return transaction(async (tx) => {
-    const actor = await authorize(tx, token, "events.manage");
+    const actor = await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     const input = normalizeBatch(request.input);
     const selectedRows = selectedOccurrences(input, request.selectedDates);
     await lockAreas(tx, [input.areaId]);
@@ -46,8 +53,8 @@ export function create(token: string, request: CreateBatch) {
         fromDate: new Date(input.fromDate),
         toDate: new Date(input.toDate),
         weekdays: input.weekdays,
-        startTime: new Date(`1970-01-01T${input.startTime}:00Z`),
-        endTime: new Date(`1970-01-01T${input.endTime}:00Z`),
+        startTime: new Date(`${TIME_ANCHOR_DATE}T${input.startTime}:00Z`),
+        endTime: new Date(`${TIME_ANCHOR_DATE}T${input.endTime}:00Z`),
         createdCount: chosen.length,
       },
     });
@@ -59,8 +66,8 @@ export function create(token: string, request: CreateBatch) {
           name: input.name,
           description: input.description,
           coverImageUrl: input.coverImageUrl,
-          kind: "RECURRING",
-          status: "DRAFT",
+          kind: PROGRAM_KINDS.RECURRING,
+          status: PROGRAM_STATUSES.DRAFT,
           startsAt: occurrence.startsAt,
           endsAt: occurrence.endsAt,
           recurringBatchId: batch.id,
@@ -93,7 +100,7 @@ export function create(token: string, request: CreateBatch) {
 
 export function detail(token: string, id: number) {
   return transaction(async (tx) => {
-    await authorize(tx, token, "events.manage");
+    await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     return readBatch(tx, id);
   });
 }

@@ -2,6 +2,10 @@ import { audit } from "../../common/audit/audit.ts";
 import { transaction } from "../../database/transaction.ts";
 import { authorize } from "../auth/auth.service.ts";
 import {
+  EVENTS_MANAGE_PERMISSION,
+  PROGRAM_STATUSES,
+} from "./constants/program.constants.ts";
+import {
   completeProgram,
   type PatchProgram,
   type ProgramInput,
@@ -41,21 +45,21 @@ function specialData(event: NonNullable<ProgramInput["specialEvent"]>) {
 
 export function list(token: string, query: ProgramList) {
   return transaction(async (tx) => {
-    await authorize(tx, token, "events.manage");
+    await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     return findProgramPage(tx, query);
   });
 }
 
 export function detail(token: string, id: number) {
   return transaction(async (tx) => {
-    await authorize(tx, token, "events.manage");
+    await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     return programDto(await findProgram(tx, id));
   });
 }
 
 export function create(token: string, input: ProgramInput) {
   return transaction(async (tx) => {
-    const actor = await authorize(tx, token, "events.manage");
+    const actor = await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     await lockAreas(tx, [input.areaId]);
     const data = programData(input);
     await assertProgramAvailability(tx, data);
@@ -63,7 +67,7 @@ export function create(token: string, input: ProgramInput) {
       data: {
         ...data,
         kind: input.kind,
-        status: "DRAFT",
+        status: PROGRAM_STATUSES.DRAFT,
         ...(input.specialEvent
           ? { specialEvent: { create: specialData(input.specialEvent) } }
           : {}),
@@ -84,7 +88,7 @@ export function create(token: string, input: ProgramInput) {
 
 export function update(token: string, id: number, patch: PatchProgram) {
   return transaction(async (tx) => {
-    const actor = await authorize(tx, token, "events.manage");
+    const actor = await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     const before = await lockProgramContext(tx, id, patch.areaId);
     await requireEditable(tx, before, patch.revision);
     const dto = programDto(before);
@@ -137,7 +141,7 @@ export function update(token: string, id: number, patch: PatchProgram) {
 
 export function remove(token: string, id: number, revision: number) {
   return transaction(async (tx) => {
-    const actor = await authorize(tx, token, "events.manage");
+    const actor = await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     const row = await lockProgramContext(tx, id);
     await requireEditable(tx, row, revision);
     if (row.specialEvent)

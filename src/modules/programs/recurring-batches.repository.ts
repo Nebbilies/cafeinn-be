@@ -6,7 +6,8 @@ import {
   programDto,
   programInclude,
 } from "./programs.repository.ts";
-import { expandRecurrence, overlaps } from "./recurrence.ts";
+import { overlaps } from "../../common/utils/time-interval.ts";
+import { expandRecurrence } from "./recurrence.ts";
 
 export async function previewOccurrences(tx: Transaction, input: BatchInput) {
   const occurrences = expandRecurrence(input);

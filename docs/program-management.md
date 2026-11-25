@@ -41,6 +41,8 @@ No durable replay/receipt store is used. Concurrent duplicate submissions cannot
 
 ## Ownership and transactions
 
+Shared date/time utilities and constants live in `src/common/utils/time-interval.ts` and `src/common/constants/`. This includes Monday-first `weekdays` and `Weekday`, Vietnam offsets, durations and supported date/timestamp limits. Program-specific limits, sort choices, cover protocols and permission values live in `src/modules/programs/constants/`; kind/status values reuse generated Prisma enums. Schemas, services, repositories and OpenAPI consume these sources. Constants extraction preserves existing values and API behavior.
+
 Authorization uses the existing ReadCommitted, 15-second transaction. Lock actor employee, then areas by ascending ID, then program. Area-row mutexes cover empty-scope conflicts. `Program.revision` protects stale edits.
 
 Program listing reads the filtered count, page and special-event configuration in one parameterized SQL statement, giving them one ReadCommitted snapshot even during concurrent changes. The totals anchor preserves filtered totals on empty or beyond-end pages. Sort identifiers/directions come from fixed allowlisted fragments, with ascending ID as the tie-breaker; filter values remain bound. Raw unsigned integers are normalized to the existing numeric DTO contract. Authorization and write transaction isolation remain unchanged.

@@ -1,20 +1,7 @@
 import { ApiError } from "../../common/api-error.ts";
 import type { BatchInput } from "./programs.schema.ts";
-import { expandRecurrence, weekdays } from "./recurrence.ts";
-
-export function normalizeBatch(input: BatchInput): BatchInput {
-  return {
-    areaId: input.areaId,
-    name: input.name,
-    description: input.description,
-    coverImageUrl: input.coverImageUrl ?? null,
-    fromDate: input.fromDate,
-    toDate: input.toDate,
-    weekdays: weekdays.filter((day) => input.weekdays.includes(day)),
-    startTime: input.startTime,
-    endTime: input.endTime,
-  };
-}
+import { expandRecurrence } from "./recurrence.ts";
+import { MAX_SELECTED_DATES } from "./constants/recurrence.constants.ts";
 
 export function selectedOccurrences(input: BatchInput, dates: string[]) {
   const selected = new Set(dates);
@@ -23,7 +10,7 @@ export function selectedOccurrences(input: BatchInput, dates: string[]) {
   );
   if (
     !dates.length ||
-    dates.length > 100 ||
+    dates.length > MAX_SELECTED_DATES ||
     selected.size !== dates.length ||
     occurrences.length !== selected.size
   ) {
