@@ -74,6 +74,28 @@ export function findArtistByEmail(tx: Transaction, normalizedEmail: string) {
   });
 }
 
+export function createArtistRecord(tx: Transaction, data: Prisma.ArtistCreateInput) {
+  return tx.artist.create({
+    data,
+    select: artistFields,
+  });
+}
+
+export function updateArtistRecord(tx: Transaction, id: number, data: Prisma.ArtistUpdateInput) {
+  return tx.artist.update({
+    where: { id },
+    data,
+    select: artistFields,
+  });
+}
+
+export function softDeleteArtistRecord(tx: Transaction, id: number, deletedAt: Date) {
+  return tx.artist.update({
+    where: { id },
+    data: { status: 'INACTIVE', deletedAt },
+  });
+}
+
 export async function findArtistPage(tx: Transaction, query: ArtistListQuery) {
   const { sort, pageSize } = query;
   const where = buildArtistWhere(query);

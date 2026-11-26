@@ -7,11 +7,13 @@ import { transaction, type Transaction } from '../../database/transaction.ts';
 import type { ArtistListQuery, CreateArtistInput, PatchArtistInput } from './artists.schema.ts';
 import {
   artistDto,
-  artistFields,
+  createArtistRecord,
   findArtist,
   findArtistByEmail,
   findArtistPage,
   lockArtist,
+  softDeleteArtistRecord,
+  updateArtistRecord,
 } from './artists.repository.ts';
 import { normalizeArtistEmail, normalizeOptionalText } from './utils/normalize-artist.ts';
 
@@ -60,17 +62,14 @@ export function createArtistContact(token: string, input: CreateArtistInput) {
 
     let row;
     try {
-      row = await tx.artist.create({
-        data: {
-          stageName: input.stageName,
-          kind: input.kind,
-          email: normalizedEmail,
-          phone: normalizeOptionalText(input.phone) ?? null,
-          genre: normalizeOptionalText(input.genre) ?? null,
-          notes: normalizeOptionalText(input.notes) ?? null,
-          status: input.status,
-        },
-        select: artistFields,
+      row = await createArtistRecord(tx, {
+        stageName: input.stageName,
+        kind: input.kind,
+        email: normalizedEmail,
+        phone: normalizeOptionalText(input.phone) ?? null,
+        genre: normalizeOptionalText(input.genre) ?? null,
+        notes: normalizeOptionalText(input.notes) ?? null,
+        status: input.status,
       });
     } catch (error) {
       mapArtistUniqueViolation(error);
@@ -102,18 +101,14 @@ export function updateArtistContact(token: string, id: number, input: PatchArtis
 
     let row;
     try {
-      row = await tx.artist.update({
-        where: { id },
-        data: {
-          stageName: input.stageName,
-          kind: input.kind,
-          email: normalizedEmail,
-          phone: normalizeOptionalText(input.phone),
-          genre: normalizeOptionalText(input.genre),
-          notes: normalizeOptionalText(input.notes),
-          status: input.status,
-        },
-        select: artistFields,
+      row = await updateArtistRecord(tx, id, {
+        stageName: input.stageName,
+        kind: input.kind,
+        email: normalizedEmail,
+        phone: normalizeOptionalText(input.phone),
+        genre: normalizeOptionalText(input.genre),
+        notes: normalizeOptionalText(input.notes),
+        status: input.status,
       });
     } catch (error) {
       mapArtistUniqueViolation(error);
@@ -141,10 +136,7 @@ export function deleteArtistContact(token: string, id: number) {
     const dto = artistDto(before);
     assertDeletableArtist(dto);
 
-    await tx.artist.update({
-      where: { id },
-      data: { status: 'INACTIVE', deletedAt: new Date() },
-    });
+    await softDeleteArtistRecord(tx, id, new Date());
 
     await audit(tx, {
       employeeId: actor.id,
