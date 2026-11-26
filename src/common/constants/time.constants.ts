@@ -1,0 +1,8 @@
+export const MILLISECONDS_PER_MINUTE = 60_000;
+export const MILLISECONDS_PER_HOUR = 3_600_000;
+export const MILLISECONDS_PER_DAY = 86_400_000;
+export const VIETNAM_OFFSET_HOURS = 7;
+export const VIETNAM_OFFSET_MS = VIETNAM_OFFSET_HOURS * MILLISECONDS_PER_HOUR;
+export const VIETNAM_OFFSET = "+07:00";
+export const TIME_ANCHOR_DATE = "1970-01-01";
+export const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;

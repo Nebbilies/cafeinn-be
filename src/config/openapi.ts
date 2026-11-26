@@ -1,5 +1,6 @@
 import { staffPaths } from './staff-openapi.ts';
 import { artistPaths } from './artists-openapi.ts';
+import { programPaths } from './programs-openapi.ts';
 
 export const openApiDocument = {
   openapi: '3.0.3',
@@ -17,6 +18,7 @@ export const openApiDocument = {
   paths: {
     ...staffPaths,
     ...artistPaths,
+    ...programPaths,
     '/api/v1/health': {
       get: {
         tags: ['Health'],

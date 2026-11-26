@@ -10,6 +10,7 @@ import { openApiDocument } from './config/openapi.ts';
 import { healthRoutes } from './modules/health/health.routes.ts';
 import { errorHandler } from './common/middleware/error-handler.ts';
 import { localPortalOrigin } from './config/env.ts';
+import { programsRoutes, recurringBatchRoutes } from './modules/programs/programs.routes.ts';
 
 export function createApp({ corsOrigin = localPortalOrigin, trustedProxyIp }: {corsOrigin?:string;trustedProxyIp?:string} = {}) {
   const app = express();
@@ -39,7 +40,15 @@ export function createApp({ corsOrigin = localPortalOrigin, trustedProxyIp }: {c
     swaggerUi.setup(undefined, swaggerOptions),
   );
   app.use('/api/v1', healthRoutes);
-  app.use(['/api/v1/auth', '/api/v1/employees', '/api/v1/artists'], (req, res, next) => {
+  app.use(
+    [
+      '/api/v1/auth',
+      '/api/v1/employees',
+      '/api/v1/artists',
+      '/api/v1/programs',
+      '/api/v1/recurring-batches',
+    ],
+    (req, res, next) => {
     res.set('Cache-Control','private, no-store');
     if (!['GET','HEAD','OPTIONS'].includes(req.method) &&
         ((req.headers.origin && req.headers.origin !== staffOrigin) ||
@@ -51,6 +60,8 @@ export function createApp({ corsOrigin = localPortalOrigin, trustedProxyIp }: {c
   app.use('/api/v1/auth',authRoutes(staffOrigin.startsWith('https://')));
   app.use('/api/v1/employees',employees);
   app.use('/api/v1/artists', artistsRoutes);
+  app.use('/api/v1/programs', programsRoutes);
+  app.use('/api/v1/recurring-batches', recurringBatchRoutes);
   app.use((_request, response) => {
     response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Resource not found.' } });
   });
