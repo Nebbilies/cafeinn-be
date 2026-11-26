@@ -533,6 +533,8 @@ model Program {
   areaId                     Int           @map("area_id") @db.Int
   name                       String        @db.VarChar(150)
   description                String?       @db.Text
+  coverImageUrl              String?       @map("cover_image_url") @db.VarChar(2048)
+  revision                   Int           @default(1) @db.UnsignedInt
   kind                       ProgramKind
   startsAt                   DateTime      @map("starts_at") @db.Timestamp(3)
   endsAt                     DateTime      @map("ends_at") @db.Timestamp(3)

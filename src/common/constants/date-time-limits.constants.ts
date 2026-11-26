@@ -1,0 +1,5 @@
+export const MIN_SUPPORTED_TIMESTAMP_MS = 1_000;
+export const MAX_SUPPORTED_TIMESTAMP_MS = Date.parse("2038-01-19T03:14:07.000Z");
+export const MIN_SUPPORTED_DATE = "1970-01-01";
+export const MAX_SUPPORTED_DATE = "2038-01-19";
+export const EXCESS_TIMESTAMP_PRECISION_PATTERN = /\.\d{4}/;
