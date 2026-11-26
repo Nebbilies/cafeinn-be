@@ -1,4 +1,5 @@
 import { staffPaths } from './staff-openapi.ts';
+import { artistPaths } from './artists-openapi.ts';
 
 export const openApiDocument = {
   openapi: '3.0.3',
@@ -8,10 +9,14 @@ export const openApiDocument = {
     description: 'HTTP API for CafeInn.',
   },
   servers: [{ url: '/' }],
-  tags: [{ name: 'Health', description: 'Service liveness.' }],
+  tags: [
+    { name: 'Health', description: 'Service liveness.' },
+    { name: 'Artists', description: 'Event artist contacts.' },
+  ],
   components: {securitySchemes:{staffCookie:{type:'apiKey',in:'cookie',name:'cafeinn_session'}}},
   paths: {
     ...staffPaths,
+    ...artistPaths,
     '/api/v1/health': {
       get: {
         tags: ['Health'],
