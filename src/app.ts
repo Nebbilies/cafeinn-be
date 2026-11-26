@@ -1,6 +1,7 @@
 import express from 'express';
 import { authRoutes } from './modules/auth/auth.routes.ts';
 import { employees } from './modules/employees/employees.routes.ts';
+import { artistsRoutes } from './modules/artists/artists.routes.ts';
 import { ApiError } from './common/api-error.ts';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -38,7 +39,7 @@ export function createApp({ corsOrigin = localPortalOrigin, trustedProxyIp }: {c
     swaggerUi.setup(undefined, swaggerOptions),
   );
   app.use('/api/v1', healthRoutes);
-  app.use(['/api/v1/auth','/api/v1/employees'], (req,res,next) => {
+  app.use(['/api/v1/auth', '/api/v1/employees', '/api/v1/artists'], (req, res, next) => {
     res.set('Cache-Control','private, no-store');
     if (!['GET','HEAD','OPTIONS'].includes(req.method) &&
         ((req.headers.origin && req.headers.origin !== staffOrigin) ||
@@ -49,6 +50,7 @@ export function createApp({ corsOrigin = localPortalOrigin, trustedProxyIp }: {c
   });
   app.use('/api/v1/auth',authRoutes(staffOrigin.startsWith('https://')));
   app.use('/api/v1/employees',employees);
+  app.use('/api/v1/artists', artistsRoutes);
   app.use((_request, response) => {
     response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Resource not found.' } });
   });
