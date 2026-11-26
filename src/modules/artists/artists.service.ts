@@ -1,6 +1,7 @@
 import { Prisma } from '../../generated/prisma/client.ts';
 import { audit } from '../../common/audit/audit.ts';
 import { ApiError } from '../../common/api-error.ts';
+import { EVENTS_MANAGE_PERMISSION } from '../../common/constants/permissions.constants.ts';
 import { authorize } from '../auth/auth.service.ts';
 import { transaction, type Transaction } from '../../database/transaction.ts';
 import type { ArtistListQuery, CreateArtistInput, PatchArtistInput } from './artists.schema.ts';
@@ -11,9 +12,8 @@ import {
   findArtistByEmail,
   findArtistPage,
   lockArtist,
-  normalizeArtistEmail,
-  normalizeOptionalText,
 } from './artists.repository.ts';
+import { normalizeArtistEmail, normalizeOptionalText } from './utils/normalize-artist.ts';
 
 /** Ensures artist has no invitation or assignment history before deletion (QD12). */
 export function assertDeletableArtist(artist: { invitationCount: number; assignmentCount: number }) {
@@ -38,14 +38,14 @@ function mapArtistUniqueViolation(error: unknown): never {
 
 export function listArtists(token: string, query: ArtistListQuery) {
   return transaction(async (tx) => {
-    await authorize(tx, token, 'events.manage');
+    await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     return findArtistPage(tx, query);
   });
 }
 
 export function artistDetail(token: string, id: number) {
   return transaction(async (tx) => {
-    await authorize(tx, token, 'events.manage');
+    await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     const row = await findArtist(tx, id);
     if (!row) throw new ApiError(404, 'ARTIST_NOT_FOUND');
     return artistDto(row);
@@ -54,7 +54,7 @@ export function artistDetail(token: string, id: number) {
 
 export function createArtistContact(token: string, input: CreateArtistInput) {
   return transaction(async (tx) => {
-    const actor = await authorize(tx, token, 'events.manage');
+    const actor = await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     const normalizedEmail = normalizeArtistEmail(input.email);
     await assertNoDuplicateEmail(tx, normalizedEmail);
 
@@ -90,7 +90,7 @@ export function createArtistContact(token: string, input: CreateArtistInput) {
 
 export function updateArtistContact(token: string, id: number, input: PatchArtistInput) {
   return transaction(async (tx) => {
-    const actor = await authorize(tx, token, 'events.manage');
+    const actor = await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     await lockArtist(tx, id);
     const before = await findArtist(tx, id);
     if (!before) throw new ApiError(404, 'ARTIST_NOT_FOUND');
@@ -133,7 +133,7 @@ export function updateArtistContact(token: string, id: number, input: PatchArtis
 
 export function deleteArtistContact(token: string, id: number) {
   return transaction(async (tx) => {
-    const actor = await authorize(tx, token, 'events.manage');
+    const actor = await authorize(tx, token, EVENTS_MANAGE_PERMISSION);
     await lockArtist(tx, id);
     const before = await findArtist(tx, id);
     if (!before) throw new ApiError(404, 'ARTIST_NOT_FOUND');

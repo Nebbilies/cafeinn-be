@@ -1,6 +1,8 @@
 import type { Transaction } from '../../database/transaction.ts';
 import type { Prisma } from '../../generated/prisma/client.ts';
 import { pageOffset, pageResult } from '../../common/pagination.ts';
+import { escapeLike } from '../../common/utils/escape-like.ts';
+import { MAX_ARTIST_ID } from './constants/artist.constants.ts';
 import type { ArtistListQuery } from './artists.schema.ts';
 
 export const artistFields = {
@@ -36,25 +38,12 @@ export function artistDto({ _count, ...fields }: SelectedArtist) {
   };
 }
 
-/** Normalizes artist email for case-insensitive uniqueness checks. */
-export function normalizeArtistEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
-
-/** Normalizes optional text fields so blank strings store as null. */
-export function normalizeOptionalText(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  const trimmed = value.trim();
-  return trimmed === '' ? null : trimmed;
-}
-
 /** Builds Prisma filter criteria for listing artists, including NS### code search. */
 export function buildArtistWhere(query: Pick<ArtistListQuery, 'status' | 'kind' | 'search'>): Prisma.ArtistWhereInput {
   const { status, kind, search } = query;
   const where: Prisma.ArtistWhereInput = { deletedAt: null, status, kind };
   if (search) {
-    const contains = search.replace(/[\\%_]/g, '\\$&');
+    const contains = escapeLike(search);
     const id = /^NS\d{3,}$/i.test(search) ? Number(search.slice(2)) : 0;
     where.OR = [
       { stageName: { contains } },
@@ -62,7 +51,7 @@ export function buildArtistWhere(query: Pick<ArtistListQuery, 'status' | 'kind' 
       { phone: { contains } },
       { genre: { contains } },
     ];
-    if (id > 0 && id <= 2_147_483_647 && search.toUpperCase() === 'NS' + String(id).padStart(3, '0')) {
+    if (id > 0 && id <= MAX_ARTIST_ID && search.toUpperCase() === 'NS' + String(id).padStart(3, '0')) {
       where.OR.push({ id });
     }
   }

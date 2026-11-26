@@ -1,6 +1,7 @@
 import type { Transaction } from '../../database/transaction.ts';
 import type { Prisma } from '../../generated/prisma/client.ts';
 import { pageOffset, pageResult } from '../../common/pagination.ts';
+import { escapeLike } from '../../common/utils/escape-like.ts';
 import type { StaffListQuery } from './employees.schema.ts';
 export const employeeFields = {
   id: true,
@@ -28,7 +29,7 @@ export async function findEmployeePage(tx: Transaction, query: StaffListQuery) {
   const { status, search, sort, pageSize } = query;
   const where: Prisma.EmployeeWhereInput = { deletedAt: null, status };
   if (search) {
-    const contains = search.replace(/[\\%_]/g, '\\$&');
+    const contains = escapeLike(search);
     const id = /^NV\d{3,}$/i.test(search) ? Number(search.slice(2)) : 0;
     where.OR = [{ fullName: { contains } }, { username: { contains } }, { email: { contains } }];
     if (id > 0 && id <= 2_147_483_647 && search.toUpperCase() === 'NV' + String(id).padStart(3, '0')) {

@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createApp } from '../src/app.ts';
 import { ApiError } from '../src/common/api-error.ts';
+import { escapeLike } from '../src/common/utils/escape-like.ts';
+import { artistDto, buildArtistWhere } from '../src/modules/artists/artists.repository.ts';
+import { assertDeletableArtist } from '../src/modules/artists/artists.service.ts';
 import {
-  artistDto,
-  buildArtistWhere,
   normalizeArtistEmail,
   normalizeOptionalText,
-} from '../src/modules/artists/artists.repository.ts';
-import { assertDeletableArtist } from '../src/modules/artists/artists.service.ts';
+} from '../src/modules/artists/utils/normalize-artist.ts';
 import { serve } from './support/http-fixture.ts';
 
 test('anonymous requests to artist endpoints require sign-in', async (context) => {
@@ -126,6 +126,7 @@ test('artist normalization, search filter, DTO mapping, and history deletion gua
   assert.ok(Array.isArray(codeWhere.OR));
   assert.ok(codeWhere.OR.some((clause) => 'id' in clause && clause.id === 12));
 
+  assert.equal(escapeLike('100%_\\Band'), '100\\%\\_\\\\Band');
   const escapedWhere = buildArtistWhere({ search: '100%_Band' });
   assert.deepEqual(escapedWhere.OR?.[0], { stageName: { contains: '100\\%\\_Band' } });
 

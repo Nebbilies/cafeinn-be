@@ -1,10 +1,15 @@
 import { z } from 'zod';
 import { email } from '../auth/auth.schema.ts';
 import { paginationQuery } from '../../common/pagination.ts';
+import {
+  artistKinds,
+  artistSorts,
+  artistStatuses,
+  DEFAULT_ARTIST_SORT,
+  MAX_ARTIST_ID,
+} from './constants/artist.constants.ts';
 
-export const artistKinds = ['SOLO', 'BAND'] as const;
-export const artistStatuses = ['ACTIVE', 'INACTIVE'] as const;
-export const artistSorts = ['id.asc', 'name.asc', 'name.desc'] as const;
+export { artistKinds, artistSorts, artistStatuses, DEFAULT_ARTIST_SORT, MAX_ARTIST_ID };
 
 const fields = z.object({
   stageName: z.string().trim().min(1).max(100),
@@ -25,13 +30,13 @@ export const patchArtist = fields
   .strict()
   .refine((input) => Object.keys(input).length > 0);
 
-export const artistId = z.coerce.number().int().positive().max(2147483647);
+export const artistId = z.coerce.number().int().positive().max(MAX_ARTIST_ID);
 
 export const artistListParameters = {
   search: z.string().trim().max(100).optional(),
   status: fields.shape.status.optional(),
   kind: fields.shape.kind.optional(),
-  sort: z.enum(artistSorts).default('id.asc'),
+  sort: z.enum(artistSorts).default(DEFAULT_ARTIST_SORT),
 };
 
 export const listArtistsQuery = paginationQuery.safeExtend(artistListParameters).strict();

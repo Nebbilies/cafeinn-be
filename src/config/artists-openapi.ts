@@ -1,9 +1,12 @@
 import { z } from 'zod';
+import { EVENTS_MANAGE_PERMISSION } from '../common/constants/permissions.constants.ts';
 import { paginatedResponse, paginationParameters } from '../common/pagination.ts';
 import {
   artistKinds,
-  artistListParameters,
   artistStatuses,
+} from '../modules/artists/constants/artist.constants.ts';
+import {
+  artistListParameters,
   createArtist,
   patchArtist,
 } from '../modules/artists/artists.schema.ts';
@@ -56,7 +59,7 @@ function operation(
   const descriptions: Record<number, string> = {
     400: 'Invalid input or query parameters.',
     401: 'Authentication session required or expired.',
-    403: 'Origin rejected or missing events.manage permission.',
+    403: `Origin rejected or missing ${EVENTS_MANAGE_PERMISSION} permission.`,
     404: 'Artist contact not found.',
     409: 'Duplicate artist email or artist has event history.',
   };
@@ -69,7 +72,14 @@ function operation(
     security: [{ staffCookie: [] }],
     responses,
     ...(options.id && {
-      parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer', minimum: 1 } }],
+      parameters: [
+        {
+          in: 'path',
+          name: 'id',
+          required: true,
+          schema: { type: 'integer', minimum: 1 },
+        },
+      ],
     }),
     ...(options.input && { requestBody: { required: true, content: content(options.input) } }),
   };
@@ -78,7 +88,7 @@ function operation(
 export const artistPaths = {
   '/api/v1/artists': {
     get: {
-      ...operation('List artist contacts (events.manage)', {
+      ...operation(`List artist contacts (${EVENTS_MANAGE_PERMISSION})`, {
         output: paginatedResponse(artistOutput),
         errors: [400, 401, 403],
       }),
@@ -93,7 +103,7 @@ export const artistPaths = {
         }),
       ),
     },
-    post: operation('Create an artist contact (events.manage)', {
+    post: operation(`Create an artist contact (${EVENTS_MANAGE_PERMISSION})`, {
       input: createArtist,
       output: artistOutput,
       status: 201,
@@ -101,18 +111,18 @@ export const artistPaths = {
     }),
   },
   '/api/v1/artists/{id}': {
-    get: operation('Read artist contact details (events.manage)', {
+    get: operation(`Read artist contact details (${EVENTS_MANAGE_PERMISSION})`, {
       id: true,
       output: artistOutput,
       errors: [400, 401, 403, 404],
     }),
-    patch: operation('Update an artist contact (events.manage)', {
+    patch: operation(`Update an artist contact (${EVENTS_MANAGE_PERMISSION})`, {
       id: true,
       input: patchArtist,
       output: artistOutput,
       errors: [400, 401, 403, 404, 409],
     }),
-    delete: operation('Delete an unused artist contact (events.manage)', {
+    delete: operation(`Delete an unused artist contact (${EVENTS_MANAGE_PERMISSION})`, {
       id: true,
       status: 204,
       errors: [400, 401, 403, 404, 409],
