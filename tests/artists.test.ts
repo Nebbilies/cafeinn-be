@@ -72,7 +72,7 @@ test('artist detail, create, update, and delete reject invalid path and body inp
   const base = await serve(createApp(), context);
   const cookie = 'cafeinn_session=' + 'a'.repeat(64);
 
-  for (const badId of ['0', '-1', 'abc', '2147483648']) {
+  for (const badId of ['0', '-1', '1e0', '1.0', '+1', 'abc', '2147483648']) {
     for (const method of ['GET', 'PATCH', 'DELETE'] as const) {
       const response = await fetch(base + '/api/v1/artists/' + badId, {
         method,
@@ -183,6 +183,8 @@ test('OpenAPI documents artist contact endpoints and query parameters', async (c
   assert.ok(item?.get);
   assert.ok(item?.patch);
   assert.ok(item?.delete);
+  assert.equal(item.get.parameters[0]?.schema?.minimum, 1);
+  assert.equal(item.get.parameters[0]?.schema?.maximum, 2147483647);
   assert.ok(item.delete.responses[204]);
   assert.ok(item.delete.responses[409]);
 });

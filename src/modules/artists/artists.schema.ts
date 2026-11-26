@@ -30,7 +30,11 @@ export const patchArtist = fields
   .strict()
   .refine((input) => Object.keys(input).length > 0);
 
-export const artistId = z.coerce.number().int().positive().max(MAX_ARTIST_ID);
+export const artistId = z
+  .string()
+  .regex(/^\d+$/)
+  .transform(Number)
+  .pipe(z.number().int().min(1).max(MAX_ARTIST_ID));
 
 export const artistListParameters = {
   search: z.string().trim().max(100).optional(),

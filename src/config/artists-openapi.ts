@@ -4,6 +4,7 @@ import { paginatedResponse, paginationParameters } from '../common/pagination.ts
 import {
   artistKinds,
   artistStatuses,
+  MAX_ARTIST_ID,
 } from '../modules/artists/constants/artist.constants.ts';
 import {
   artistListParameters,
@@ -77,7 +78,7 @@ function operation(
           in: 'path',
           name: 'id',
           required: true,
-          schema: { type: 'integer', minimum: 1 },
+          schema: { type: 'integer', minimum: 1, maximum: MAX_ARTIST_ID },
         },
       ],
     }),
