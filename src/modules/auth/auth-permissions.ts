@@ -1,3 +1,5 @@
+import { EVENTS_MANAGE_PERMISSION } from '../../common/constants/permissions.constants.ts';
+
 export const staffGrants = {
   ADMIN: [
     'users.manage',
@@ -10,6 +12,6 @@ export const staffGrants = {
     'policies.manage',
     'audit.read',
   ],
-  EVENT_STAFF: ['events.manage'],
+  EVENT_STAFF: [EVENTS_MANAGE_PERMISSION],
   SALES_STAFF: ['sales.manage', 'menu.status', 'refunds.request'],
 } as const;
